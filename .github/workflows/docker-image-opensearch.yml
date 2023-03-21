@@ -39,7 +39,14 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
-          password: ${{ secrets.TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ !env.ACT }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
         if: ${{ !env.ACT }}
 
       - name: Set build-args
@@ -57,5 +64,5 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: OPENSEARCH_VERSION=${{ env.OPENSEARCH_VERSION }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/rolldev-opensearch:${{ matrix.version }}
+          tags: ghcr.io/${{ github.repository_owner }}/opensearch:${{ matrix.version }}, rollupdev/opensearch:${{ matrix.version }}
         if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}
