@@ -22,6 +22,9 @@ jobs:
           - "3.9"
           - "3.10"
           - "3.11"
+        include:
+          - version: "3.12"
+            modifier: "-rc"
 
     steps:
       - uses: actions/checkout@v3
@@ -40,7 +43,7 @@ jobs:
         with:
           context: images/rabbitmq
           platforms: linux/amd64,linux/arm64
-          build-args: RABBITMQ_VERSION=${{ matrix.version }}
+          build-args: RABBITMQ_VERSION=${{ matrix.version }}${{ matrix.modifier }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/rolldev-rabbitmq:${{ matrix.version }}
+          tags: ghcr.io/${{ github.repository_owner }}/rolldev-rabbitmq:${{ matrix.version }}${{ matrix.modifier }}
         if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}
