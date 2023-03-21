@@ -4,8 +4,8 @@ on:
     - cron: "0 6 * * *" # 6 AM Daily
   push:
     paths:
-      - images/.trigger
-      - images/mailhog/**
+      - .trigger
+      - mailhog/**
       - .github/workflows/*mailhog*
 
 jobs:
@@ -28,7 +28,7 @@ jobs:
 
       - uses: docker/build-push-action@v4
         with:
-          context: images/mailhog
+          context: mailhog
           platforms: linux/amd64,linux/arm64
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
           tags: ghcr.io/${{ github.repository_owner }}/rolldev-mailhog:latest

@@ -4,8 +4,8 @@ on:
     - cron: "0 6 * * *" # 6 AM Daily
   push:
     paths:
-      - images/.trigger
-      - images/nginx/**
+      - .trigger
+      - nginx/**
       - .github/workflows/*nginx*
 
 jobs:
@@ -41,7 +41,7 @@ jobs:
 
       - uses: docker/build-push-action@v4
         with:
-          context: images/nginx
+          context: nginx
           platforms: linux/amd64,linux/arm64
           build-args: NGINX_VERSION=${{ matrix.version }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}

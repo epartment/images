@@ -4,8 +4,8 @@ on:
     - cron: "0 6 * * *" # 6 AM Daily
   push:
     paths:
-      - images/.trigger
-      - images/redis/**
+      - .trigger
+      - redis/**
       - .github/workflows/*redis*
 
 jobs:
@@ -39,7 +39,7 @@ jobs:
 
       - uses: docker/build-push-action@v4
         with:
-          context: images/redis
+          context: redis
           platforms: linux/amd64,linux/arm64
           build-args: REDIS_VERSION=${{ matrix.version }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}

@@ -4,8 +4,8 @@ on:
     - cron: "0 6 * * *" # 6 AM Daily
   push:
     paths:
-      - images/.trigger
-      - images/mysql/**
+      - .trigger
+      - mysql/**
       - .github/workflows/*mysql*
 
 jobs:
@@ -44,7 +44,7 @@ jobs:
 
       - uses: docker/build-push-action@v4
         with:
-          context: images/mysql
+          context: mysql
           platforms: linux/amd64,linux/arm64
           build-args: MYSQL_VERSION=${{ env.MYSQL_VERSION }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
@@ -87,7 +87,7 @@ jobs:
 
       - uses: docker/build-push-action@v4
         with:
-          context: images/mysql
+          context: mysql
           platforms: linux/amd64
           build-args: MYSQL_VERSION=${{ env.MYSQL_VERSION }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}

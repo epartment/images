@@ -4,8 +4,8 @@ on:
     - cron: "0 6 * * *" # 6 AM Daily
   push:
     paths:
-      - images/.trigger
-      - images/mariadb/**
+      - .trigger
+      - mariadb/**
       - .github/workflows/*mariadb*
 
 jobs:
@@ -48,7 +48,7 @@ jobs:
 
       - uses: docker/build-push-action@v4
         with:
-          context: images/mariadb
+          context: mariadb
           platforms: linux/amd64,linux/arm64
           build-args: MARIADB_VERSION=${{ matrix.version }}${{ matrix.modifier }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}

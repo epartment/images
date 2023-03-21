@@ -4,8 +4,8 @@ on:
     - cron: "0 6 * * *" # 6 AM Daily
   push:
     paths:
-      - images/.trigger
-      - images/opensearch/**
+      - .trigger
+      - opensearch/**
       - .github/workflows/*opensearch*
 
 
@@ -53,7 +53,7 @@ jobs:
 
       - uses: docker/build-push-action@v4
         with:
-          context: images/opensearch
+          context: opensearch
           platforms: linux/amd64,linux/arm64
           build-args: OPENSEARCH_VERSION=${{ env.OPENSEARCH_VERSION }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}

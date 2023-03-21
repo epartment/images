@@ -5,8 +5,8 @@ on:
   pull_request:
   push:
     paths:
-      - images/.trigger
-      - images/php-fpm/**
+      - .trigger
+      - php-fpm/**
       - .github/workflows/*php-fpm*
       - .github/workflows/php-matrix/**
     branches:
@@ -81,8 +81,8 @@ jobs:
 
       - uses: docker/build-push-action@v4
         with:
-          file: images/php-fpm/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             PHP_VERSION=${{ matrix.php_version }}
@@ -96,8 +96,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.latest }}
         with:
-          file: images/php-fpm/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             PHP_VERSION=${{ matrix.php_version }}
@@ -134,8 +134,8 @@ jobs:
 
       - uses: docker/build-push-action@v4
         with:
-          file: images/php-fpm/node/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/node/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -150,8 +150,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.latest }}
         with:
-          file: images/php-fpm/node/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/node/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -190,8 +190,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version!='x' }}
         with:
-          file: images/php-fpm/xdebug3/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/xdebug3/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -205,8 +205,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version=='x' }}
         with:
-          file: images/php-fpm/xdebug3/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/xdebug3/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -220,8 +220,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version!='x' && matrix.latest }}
         with:
-          file: images/php-fpm/xdebug3/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/xdebug3/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -235,8 +235,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version=='x' && matrix.latest }}
         with:
-          file: images/php-fpm/xdebug3/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/xdebug3/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -274,8 +274,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version!='x' }}
         with:
-          file: images/php-fpm/magento1/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/magento1/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -288,8 +288,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version=='x' }}
         with:
-          file: images/php-fpm/magento1/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/magento1/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -302,8 +302,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version!='x' && matrix.latest }}
         with:
-          file: images/php-fpm/magento1/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/magento1/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -316,8 +316,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version=='x' && matrix.latest }}
         with:
-          file: images/php-fpm/magento1/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/magento1/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -353,8 +353,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version!='x' }}
         with:
-          file: images/php-fpm/magento1/xdebug3/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/magento1/xdebug3/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm-magento1
@@ -368,8 +368,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version=='x' }}
         with:
-          file: images/php-fpm/magento1/xdebug3/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/magento1/xdebug3/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm-magento1
@@ -383,8 +383,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version!='x' && matrix.latest }}
         with:
-          file: images/php-fpm/magento1/xdebug3/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/magento1/xdebug3/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm-magento1
@@ -398,8 +398,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version=='x' && matrix.latest }}
         with:
-          file: images/php-fpm/magento1/xdebug3/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/magento1/xdebug3/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm-magento1
@@ -437,8 +437,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version!='x' }}
         with:
-          file: images/php-fpm/magento2/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/magento2/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -451,8 +451,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version=='x' }}
         with:
-          file: images/php-fpm/magento2/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/magento2/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -465,8 +465,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version!='x' && matrix.latest }}
         with:
-          file: images/php-fpm/magento2/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/magento2/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -479,8 +479,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version=='x' && matrix.latest }}
         with:
-          file: images/php-fpm/magento2/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/magento2/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -517,8 +517,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version!='x' }}
         with:
-          file: images/php-fpm/magento2/xdebug3/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/magento2/xdebug3/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm-magento2
@@ -532,8 +532,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version=='x' }}
         with:
-          file: images/php-fpm/magento2/xdebug3/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/magento2/xdebug3/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm-magento2
@@ -547,8 +547,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version!='x' && matrix.latest }}
         with:
-          file: images/php-fpm/magento2/xdebug3/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/magento2/xdebug3/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm-magento2
@@ -562,8 +562,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version=='x' && matrix.latest }}
         with:
-          file: images/php-fpm/magento2/xdebug3/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/magento2/xdebug3/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm-magento2
@@ -601,8 +601,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version!='x' }}
         with:
-          file: images/php-fpm/wordpress/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/wordpress/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -615,8 +615,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version=='x' }}
         with:
-          file: images/php-fpm/wordpress/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/wordpress/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -629,8 +629,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version!='x' && matrix.latest }}
         with:
-          file: images/php-fpm/wordpress/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/wordpress/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -643,8 +643,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version=='x' && matrix.latest }}
         with:
-          file: images/php-fpm/wordpress/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/wordpress/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm
@@ -681,8 +681,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version!='x' }}
         with:
-          file: images/php-fpm/wordpress/xdebug3/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/wordpress/xdebug3/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm-wordpress
@@ -696,8 +696,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version=='x' }}
         with:
-          file: images/php-fpm/wordpress/xdebug3/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/wordpress/xdebug3/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm-wordpress
@@ -711,8 +711,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version!='x' && matrix.latest }}
         with:
-          file: images/php-fpm/wordpress/xdebug3/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/wordpress/xdebug3/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm-wordpress
@@ -726,8 +726,8 @@ jobs:
       - uses: docker/build-push-action@v4
         if: ${{ matrix.node_version=='x' && matrix.latest }}
         with:
-          file: images/php-fpm/wordpress/xdebug3/Dockerfile
-          context: images/php-fpm/context
+          file: php-fpm/wordpress/xdebug3/Dockerfile
+          context: php-fpm/context
           platforms: linux/amd64,linux/arm64
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/rolldev-php-fpm-wordpress
