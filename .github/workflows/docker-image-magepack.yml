@@ -6,7 +6,7 @@ on:
   push:
     paths:
       - magepack/**
-      - .github/workflows/magepack.yml
+      - .github/workflows/*magepack*
 
 jobs:
   magepack:
