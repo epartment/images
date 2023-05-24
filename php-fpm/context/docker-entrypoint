@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-echo "USER ID: $(id -g)"
-echo "USER GROUP ID: $(id -g)"
+echo "USER ID: $(id -u www-data)"
+echo "USER GROUP ID: $(id -g www-data)"
 echo "CHANGE TO USER ID: ${USER_ID}"
 echo "CHANGE TO GROUP ID: ${GROUP_ID}"
 echo "OSTYPE: ${OSTYPE}"
