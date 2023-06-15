@@ -9,7 +9,6 @@ get_latest_release() {
 
 ROLL_VERSION=${ROLL_VERSION:-"in-dev"}
 LATEST_RELEASE="$(get_latest_release)"
-UPDATE_AVAILABLE=0
 
 if [[ "$ROLL_VERSION" != "$LATEST_RELEASE" ]]; then
   sed -ie "s/class\=\"update hide\"/class\=\"update\"/g" /usr/share/nginx/html/index.html
