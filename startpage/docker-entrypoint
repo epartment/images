@@ -1,10 +1,11 @@
 #!/bin/bash
 set -e
 
+ROLL_VERSION=${ROLL_VERSION:-"in-dev"}
+
 # configure php additions.ini
-cat /usr/share/nginx/html/index.html.template \
-  | envsubst '${ROLL_SERVICE_DOMAIN} ${ROLL_VERSION}' \
-  | tee /usr/share/nginx/html/index.html
+sed -ie "s/{{ROLL_VERSION}}/${ROLL_VERSION}/g" /usr/share/nginx/html/index.html
+sed -ie "s/{{ROLL_SERVICE_DOMAIN}}/${ROLL_SERVICE_DOMAIN}/g" /usr/share/nginx/html/index.html
 
 # Start Nginx
 nginx -g 'daemon off;'
