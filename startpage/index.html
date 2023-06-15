@@ -26,6 +26,20 @@
         header a:hover {
             text-decoration: underline;
         }
+        header .update {
+            margin: 5px;
+            padding: 15px;
+            border: 5px solid red;
+        }
+
+        header pre
+        {
+            padding: 2px;
+            background-color: #262626;
+        }
+        .hide {
+            display:none;
+        }
         .roll-mark {
             line-height: 1;
             display: inline-block;
@@ -77,6 +91,11 @@
 </head>
 <body>
 <header>
+    <div class="update hide">
+        <span style="color:red;">UPDATE AVAILABLE > {{LATEST_RELEASE}}</span>
+        <p>If you want to update please run:</p>
+        <pre>brew update && brew upgrade dockergiant/roll/roll</pre>
+    </div>
     <div class="roll-mark">
     ██████╗  ██████╗ ██╗     ██╗     ██████╗ ███████╗██╗   ██╗
     ██╔══██╗██╔═══██╗██║     ██║     ██╔══██╗██╔════╝██║   ██║
@@ -88,6 +107,7 @@
     by DockerGiant<br>
     fork of Warden by David Alger<br>
     v.${ROLL_VERSION}<br>
+
     <a href="https://github.com/dockergiant/rolldev/releases">Check for Updates</a>
 </header>
 <ul class="services-list">
