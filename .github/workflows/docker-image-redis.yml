@@ -23,6 +23,10 @@ jobs:
           - "6.0"
           - "6.2"
           - "7.0"
+        include:
+          - version: "7.2"
+            modifier: "-rc"
+
 
     steps:
       - uses: actions/checkout@v3
@@ -48,7 +52,7 @@ jobs:
         with:
           context: redis
           platforms: linux/amd64,linux/arm64
-          build-args: REDIS_VERSION=${{ matrix.version }}
+          build-args: REDIS_VERSION=${{ matrix.version }}${{ matrix.modifier }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/redis:${{ matrix.version }}, rollupdev/redis:${{ matrix.version }}
+          tags: ghcr.io/${{ github.repository_owner }}/redis:${{ matrix.version }}${{ matrix.modifier }}, rollupdev/redis:${{ matrix.version }}${{ matrix.modifier }}
         if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}
