@@ -38,7 +38,7 @@
             background-color: #262626;
         }
         .hide {
-            display:none;
+            /*display:none;*/
         }
         .roll-mark {
             line-height: 1;
@@ -92,8 +92,8 @@
 <body>
 <header>
     <div class="update hide">
-        <span style="color:red;">UPDATE AVAILABLE > {{LATEST_RELEASE}}</span>
-        <p>If you want to update please run:</p>
+        <span style="color:red;">UPDATE AVAILABLE from: <b>v.{{ROLL_VERSION}}</b> to: <i style="color:yellow;" ><b>v.{{LATEST_RELEASE}}</b></i></span>
+        <p>You can update RollDev running the following command:</p>
         <pre>brew update && brew upgrade dockergiant/roll/roll</pre>
     </div>
     <div class="roll-mark">
@@ -106,15 +106,15 @@
     </div><br>
     by DockerGiant<br>
     fork of Warden by David Alger<br>
-    v.${ROLL_VERSION}<br>
+    RollDev v.{{ROLL_VERSION}}<br>
 
     <a href="https://github.com/dockergiant/rolldev/releases">Check for Updates</a>
 </header>
 <ul class="services-list">
-    <li class="mailhog"><a href="https://mailhog.${ROLL_SERVICE_DOMAIN}/">Mailhog</a></li>
-    <li class="traefik"><a href="https://traefik.${ROLL_SERVICE_DOMAIN}/">Traefik</a></li>
-    <li class="dnsmasq"><a href="https://dnsmasq.${ROLL_SERVICE_DOMAIN}/">DNSMasq</a></li>
-    <li class="portainer"><a href="https://portainer.${ROLL_SERVICE_DOMAIN}/">Portainer</a></li>
+    <li class="mailhog"><a href="https://mailhog.{{ROLL_SERVICE_DOMAIN}}/">Mailhog</a></li>
+    <li class="traefik"><a href="https://traefik.{{ROLL_SERVICE_DOMAIN}}/">Traefik</a></li>
+    <li class="dnsmasq"><a href="https://dnsmasq.{{ROLL_SERVICE_DOMAIN}}/">DNSMasq</a></li>
+    <li class="portainer"><a href="https://portainer.{{ROLL_SERVICE_DOMAIN}}/">Portainer</a></li>
 </ul>
 </body>
 </html>
