@@ -9,5 +9,3 @@ RUN export PHP_INI_DIR="/usr/local/etc/php"; install-php-extensions ${XDEBUG_TYP
 
 COPY xdebug3/etc/*.ini /usr/local/etc/php/
 COPY xdebug3/etc/conf.d/* /usr/local/etc/php/conf.d/
-
-USER www-data

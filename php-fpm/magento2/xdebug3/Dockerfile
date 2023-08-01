@@ -8,5 +8,3 @@ RUN install-php-extensions ${XDEBUG_TYPE}
 
 COPY xdebug3/etc/*.ini ${PHP_INI_DIR}/
 COPY xdebug3/etc/conf.d/* ${PHP_INI_DIR}/conf.d/
-
-USER www-data

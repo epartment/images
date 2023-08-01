@@ -9,5 +9,3 @@ ADD https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar /u
 # Create wp alias for wp-cli
 RUN chmod +rx /usr/local/bin/wp-cli \
     && ln -s /usr/local/bin/wp-cli /usr/local/bin/wp
-
-USER www-data

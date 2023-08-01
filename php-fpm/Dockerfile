@@ -157,8 +157,6 @@ RUN set -eux; \
 
 STOPSIGNAL SIGQUIT
 
-ENTRYPOINT ["docker-entrypoint"]
+ENTRYPOINT ["docker-entrypoint", "php-fpm"]
 WORKDIR /var/www/html
-USER www-data
 EXPOSE 9000
-CMD ["php-fpm"]
