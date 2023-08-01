@@ -29,5 +29,3 @@ RUN ln -s /usr/local/bin/node /usr/local/bin/nodejs \
 
 # Copy Yarn
 COPY --from=node /opt /opt
-
-USER www-data
