@@ -15,6 +15,7 @@ ENV MAILHOG_PORT    1025
 ENV USER_ID         501
 ENV GROUP_ID        20
 ENV OSTYPE          darwin220
+ENV ADD_PHP_EXT     ""
 
 # PHP Extension Installer
 ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/

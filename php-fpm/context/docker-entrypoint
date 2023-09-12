@@ -72,6 +72,11 @@ for DIR in ${CHOWN_DIR_LIST:-}; do
   fi
 done
 
+# Add additional specified php extensions if defined on runtime
+if [[ "$ADD_PHP_EXT" != "" ]]; then
+  /usr/local/bin/install-php-extensions "$ADD_PHP_EXT"
+fi
+
 # Resolve permission issue with /var/www/html being owned by root as a result of volume mounted on php-fpm
 # and nginx combined with nginx running as a different uid/gid than php-fpm does. This condition, when it
 # surfaces would cause mutagen sync failures (on initial startup) on macOS environments.
