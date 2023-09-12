@@ -35,5 +35,3 @@ RUN mkdir /home/www-data/mage-cache-clean \
     && ln -s /home/www-data/mage-cache-clean/vendor/bin/cache-clean.js /usr/local/bin/cache-clean.js \
     && ln -s /home/www-data/mage-cache-clean/vendor/bin/cache-clean.js /usr/local/bin/cache-clean \
     && chmod +rx -R /home/www-data/mage-cache-clean
-
-USER www-data
