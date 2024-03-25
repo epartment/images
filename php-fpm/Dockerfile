@@ -89,7 +89,7 @@ RUN set -eux; \
     graphicsmagick \
     qrencode;
 
-RUN pip install segno
+RUN /usr/bin/pip3 install segno
 
 COPY docker-entrypoint /usr/local/bin/
 COPY etc/profile.d/*.sh /etc/profile.d/
@@ -111,7 +111,7 @@ RUN if [ "$(printf "7.2\n${PHP_VERSION}" | sort -g | head -n1)" != "7.2" ]; \
 
 # If PHP < 7.3
 RUN if [ "$(printf "7.3\n${PHP_VERSION}" | sort -g | head -n1)" != "7.3" ]; \
-    then apt-get install -y --no-install-recommends bind9utils python-pip; fi
+    then apt-get install -y --no-install-recommends bind9utils; fi
 
 # If PHP >= 7.1
 RUN if [ "$(printf "7.1\n${PHP_VERSION}" | sort -g | head -n1)" = "7.1" ]; \
@@ -158,7 +158,7 @@ RUN mkdir -p /home/www-data \
 # clean up apt packages and temporary files
 RUN set -eux; \
     apt-get clean; \
-    rm -rf /var/lib/apt/lists
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 STOPSIGNAL SIGQUIT
 
