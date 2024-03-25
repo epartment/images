@@ -105,21 +105,25 @@ COPY --from=composer:1 /usr/bin/composer /usr/bin/composer1
 COPY --from=composer:2.2 /usr/bin/composer /usr/bin/composer2lts
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer2
 
+# If PHP = 7.0 | debs are archived so use those
+RUN if [ "$(printf "${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{print $1"."$2}')" = "7.0" ]; \
+    then echo -e "deb http://archive.debian.org/debian/ stretch main\ndeb-src http://archive.debian.org/debian/ stretch main" > /etc/apt/sources.list; fi
+
 # If PHP < 7.2
-RUN if [ "$(printf "7.2\n${PHP_VERSION}" | sort -g | head -n1)" != "7.2" ]; \
+RUN if [ "$(printf "7.2\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{print $1"."$2}')" != "7.2" ]; \
     then mv -f /usr/bin/composer2lts /usr/bin/composer2; fi
 
 # If PHP < 7.3
-RUN if [ "$(printf "7.3\n${PHP_VERSION}" | sort -g | head -n1)" != "7.3" ]; \
+RUN if [ "$(printf "7.3\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{print $1"."$2}')" != "7.3" ]; \
     then apt-get install -y --no-install-recommends bind9utils; fi
 
 # If PHP >= 7.1
-RUN if [ "$(printf "7.1\n${PHP_VERSION}" | sort -g | head -n1)" = "7.1" ]; \
+RUN if [ "$(printf "7.1\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{print $1"."$2}')" = "7.1" ]; \
     then apt-get install -y --no-install-recommends libmariadb3 libmariadb-dev \
     && sed -i '/disable ghostscript format types/,+6d' /etc/ImageMagick-6/policy.xml; fi
 
 # If PHP >= 7.3
-RUN if [ "$(printf "7.3\n${PHP_VERSION}" | sort -g | head -n1)" = "7.3" ]; \
+RUN if [ "$(printf "7.3\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{print $1"."$2}')" = "7.3" ]; \
     then apt-get install -y --no-install-recommends bind9-utils; fi
 
 RUN mkdir -p /etc/zsh/zshrc.d  \
