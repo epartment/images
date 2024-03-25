@@ -25,7 +25,7 @@ COPY --from=mhs-builder /go/bin/mhsendmail /usr/local/bin/mhsendmail
 
 # If PHP = 7.0 | debs are archived so use those
 RUN if [ "$(printf "${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{print $1"."$2}')" = "7.0" ]; \
-    then echo -e "deb http://archive.debian.org/debian/ stretch main\ndeb-src http://archive.debian.org/debian/ stretch main" > /etc/apt/sources.list; \
+    then printf "deb http://archive.debian.org/debian/ stretch main\ndeb-src http://archive.debian.org/debian/ stretch main" > /etc/apt/sources.list; \
     apt-get update -y; \
     apt-get install -y --no-install-recommends \
     python \
@@ -120,8 +120,9 @@ RUN if [ "$(printf "7.3\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{prin
 
 # If PHP >= 7.1
 RUN if [ "$(printf "7.1\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{print $1"."$2}')" = "7.1" ]; \
-    then apt-get install -y --no-install-recommends libmariadb3 libmariadb-dev python3 python3-pip \
-    && sed -i '/disable ghostscript format types/,+6d' /etc/ImageMagick-6/policy.xml; fi
+    then apt-get install -y --no-install-recommends libmariadb3 libmariadb-dev python3 python3-pip; \
+    sed -i '/disable ghostscript format types/,+6d' /etc/ImageMagick-6/policy.xml; \
+    if [ ! -f "/usr/bin/pip" ]; then ln -s /usr/bin/pip3 /usr/bin/pip; fi; fi
 
 # If PHP >= 7.3
 RUN if [ "$(printf "7.3\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{print $1"."$2}')" = "7.3" ]; \
