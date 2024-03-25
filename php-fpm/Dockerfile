@@ -80,12 +80,15 @@ RUN set -eux; \
     ack  \
     automake  \
     autoconf \
-    python \
+    python3 \
+    python3-pip \
     cron \
     htop \
     chromium \
     imagemagick \
     graphicsmagick;
+
+RUN pip install segno
 
 COPY docker-entrypoint /usr/local/bin/
 COPY etc/profile.d/*.sh /etc/profile.d/
