@@ -86,7 +86,8 @@ RUN set -eux; \
     htop \
     chromium \
     imagemagick \
-    graphicsmagick;
+    graphicsmagick \
+    qrencode;
 
 RUN pip install segno
 
@@ -110,7 +111,7 @@ RUN if [ "$(printf "7.2\n${PHP_VERSION}" | sort -g | head -n1)" != "7.2" ]; \
 
 # If PHP < 7.3
 RUN if [ "$(printf "7.3\n${PHP_VERSION}" | sort -g | head -n1)" != "7.3" ]; \
-    then apt-get install -y --no-install-recommends bind9utils; fi
+    then apt-get install -y --no-install-recommends bind9utils python-pip; fi
 
 # If PHP >= 7.1
 RUN if [ "$(printf "7.1\n${PHP_VERSION}" | sort -g | head -n1)" = "7.1" ]; \
