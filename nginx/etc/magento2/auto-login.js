@@ -6,10 +6,32 @@
 
         require([
             'ko', // KnockoutJS
-            'Magento_TwoFactorAuth/js/google/auth'
-        ], function(ko, twoWay) {
+            'jquery',
+            'Magento_Ui/js/modal/alert',
+            'Magento_TwoFactorAuth/js/google/auth',
+        ], function(ko, $, alert) {
             // Your KnockoutJS-dependent code here
 
+            function showErrorModal(errorMessage) {
+                alert({
+                    title: ' <div style="background: linear-gradient(to right, #32CD32, #00BFFF, #FFD700); -webkit-background-clip: text; color: transparent;">🔑 Auto login for admin script 🚀</div>',
+                    content: `
+                    <p>
+                        Did you do the initial setup with <pre>roll setup-autologin</pre> <b>After executing above command, refresh the page!</b> </br></br>Otherwise, try to log in manually. If the problem persists, turn off auto login in your .env.roll<pre>ROLL_ADMIN_AUTOLOGIN=0</pre>
+                    </p>
+                    <hr></br>
+                    <p>
+                        Found the following errors: <pre>${errorMessage}</pre>
+                    </p>
+                    <p>If the above message is something with CAPTCHA, this usually means that the setup has not been done.</p>
+                    <p>Have you done that already? Then click on the OK button below and fill in the captcha yourself and login manually. The username and password are already prefilled. 😊</p>
+                `,
+                    actions: {
+                        always: function(){}
+                    }
+                });
+
+            }
             function isPathMatchAndClassExists() {
                 const pathMatch = window.location.href.includes("backend") ||
                     window.location.href.includes("shopmanager");
@@ -211,8 +233,23 @@
                 if (window.location.href.includes("tfa/google/auth")) {
                     checkFieldInterval = setInterval(attemptFillTOTPField, 500);
                 } else {
+                    function checkForErrorMessageAndAlert() {
+                        // Zoek naar het element met de class "message message-error error"
+                        var errorMessageElement = document.querySelector('.message.message-error.error');
+
+                        // Controleer of het element bestaat
+                        if (errorMessageElement) {
+                            // Het element bestaat, geef een waarschuwing in de console of als een alert
+                            var errMsg = errorMessageElement.textContent.trim();
+                            console.log('Er is een foutmelding gevonden: ' + errMsg);
+                            showErrorModal(errMsg);
+                        } else {
+                            // Het element bestaat niet, geef eventueel een andere melding of doe niets
+                            triggerKnockoutBoundFunction();
+                        }
+                    }
                     setTimeout(() => { // Add a slight delay to ensure fields are filled
-                        triggerKnockoutBoundFunction();
+                        checkForErrorMessageAndAlert();
                     }, 200); // Adjust delay as necessary
                 }
 
