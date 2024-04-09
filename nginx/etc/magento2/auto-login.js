@@ -3,14 +3,25 @@
         // RequireJS is not available yet, check again in 100ms
         setTimeout(waitForRequireJS, 100);
     } else {
+
         require([
             'ko' // KnockoutJS
         ], function(ko) {
             // Your KnockoutJS-dependent code here
 
-            console.log("%c🌟 Auto login for admin script is active! 🍰", "background: linear-gradient(to right, #32CD32, #00BFFF, #FFD700); color: transparent; -webkit-background-clip: text; font-size: 16px;");
-            console.log("Auto admin login is only used in a local environment\nand is injected through nginx for convenience and not changing the project root files. 😊\nTo disable, add ROLL_ADMIN_AUTOLOGIN=0 in your .env.roll config. 💡\n\n⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠤⠒⠒⠒⠒⠠⢄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⠀⢀⡴⠞⠀⠀⠀⠀⠀⠀⠀⠘⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⠀⢻⠄⢠⠔⠒⠒⠒⠒⠒⢢⡀⢸⡄⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⠀⡼⠀⠇⠀⠀⠀⠀⠀⠀⠀⢳⢸⠂⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⣀⣹⠞⠀⠀⠀⠀⠀⠀⠀⠀⣸⣼⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⠹⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢻⡅⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⠀⠙⢲⠀⠀⠀⠀⠀⠀⠀⢠⡞⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⠀⠀⠀⠀⠀⠀⢠⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⠀⢠⣿⠀⠀⠀⠀⠀⠀⢸⡧⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⢀⡠⠔⢚⡟⡏⠉⠙⡇⠀⠀⣠⠟⡇⠀⠉⠁⠀⠒⠠⠄⣀⠀⠀⠀\n⠀⣠⠔⠊⠁⠀⠀⢸⠀⡇⠀⢰⠃⣀⠜⠁⢰⠃⠀⠀⠀⠀⠀⠀⠀⠀⠈⠳⡀\n⡞⠀⠀⠀⠀⠀⠀⢸⣀⣇⣀⣸⣯⡁⠀⡠⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢹\n⡇⠀⠀⠀⠀⠀⠀⠈⢹⣰⠛⡆⠀⠈⠉⢰⠃⠀⠀⠀⠀⣴⠶⡀⠀⠀⠀⠀⢸\n⡇⠀⠀⠀⠀⠀⠀⠀⢸⣟⠀⡇⠀⠀⠀⢸⠀⠀⠀⠀⠀⢹⠀⢇⠀⢴⣦⠀⣏\n⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⣴⠃⠀⠀⠀⢸⡄⠀⠀⠀⠀⢈⠀⠈⣓⢻⡟⢱⡛");
-            if (window.location.href.includes("shopmanager") || window.location.href.includes("admin")) {
+            function isPathMatchAndClassExists() {
+                const pathMatch = window.location.href.includes("backend") ||
+                    window.location.href.includes("shopmanager");
+
+                const classExists = document.body.classList.contains('page-layout-admin-login');
+
+                return pathMatch && classExists;
+            }
+
+            if (isPathMatchAndClassExists()) {
+
+                console.log("%c🌟 Auto login for admin script is active! 🍰", "background: linear-gradient(to right, #32CD32, #00BFFF, #FFD700); color: transparent; -webkit-background-clip: text; font-size: 16px;");
+                console.log("Auto admin login is only used in a local environment\nand is injected through nginx for convenience and not changing the project root files. 😊\nTo disable, add ROLL_ADMIN_AUTOLOGIN=0 in your .env.roll config. 💡\n\n⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠤⠒⠒⠒⠒⠠⢄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⠀⢀⡴⠞⠀⠀⠀⠀⠀⠀⠀⠘⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⠀⢻⠄⢠⠔⠒⠒⠒⠒⠒⢢⡀⢸⡄⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⠀⡼⠀⠇⠀⠀⠀⠀⠀⠀⠀⢳⢸⠂⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⣀⣹⠞⠀⠀⠀⠀⠀⠀⠀⠀⣸⣼⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⠹⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢻⡅⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⠀⠙⢲⠀⠀⠀⠀⠀⠀⠀⢠⡞⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⠀⠀⠀⠀⠀⠀⢠⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⠀⢠⣿⠀⠀⠀⠀⠀⠀⢸⡧⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⢀⡠⠔⢚⡟⡏⠉⠙⡇⠀⠀⣠⠟⡇⠀⠉⠁⠀⠒⠠⠄⣀⠀⠀⠀\n⠀⣠⠔⠊⠁⠀⠀⢸⠀⡇⠀⢰⠃⣀⠜⠁⢰⠃⠀⠀⠀⠀⠀⠀⠀⠀⠈⠳⡀\n⡞⠀⠀⠀⠀⠀⠀⢸⣀⣇⣀⣸⣯⡁⠀⡠⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢹\n⡇⠀⠀⠀⠀⠀⠀⠈⢹⣰⠛⡆⠀⠈⠉⢰⠃⠀⠀⠀⠀⣴⠶⡀⠀⠀⠀⠀⢸\n⡇⠀⠀⠀⠀⠀⠀⠀⢸⣟⠀⡇⠀⠀⠀⢸⠀⠀⠀⠀⠀⢹⠀⢇⠀⢴⣦⠀⣏\n⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⣴⠃⠀⠀⠀⢸⡄⠀⠀⠀⠀⢈⠀⠈⣓⢻⡟⢱⡛");
 
                 const usernameField = document.getElementById("username");
                 const passwordField = document.getElementById("login");
@@ -53,7 +64,6 @@
                     if (button) {
                         // Access Knockout's binding context
                         var bindingContext = ko.contextFor(button);
-                        console.log(bindingContext);
 
                         if (bindingContext && bindingContext.$data && typeof bindingContext.$data.value === 'function') {
                             bindingContext.$data.value('');
@@ -180,6 +190,43 @@
                 if (window.location.href.includes("tfa/google/auth")) {
                     checkFieldInterval = setInterval(attemptFillTOTPField, 500);
                 }
+
+
+                function setupMutationObserver() {
+                    // Function to remove elements by class name
+                    function removeElementsByClass(className) {
+                        const elements = document.getElementsByClassName(className);
+                        while (elements.length > 0) {
+                            elements[0].parentNode.removeChild(elements[0]);
+                        }
+                    }
+
+                    // Observer callback to execute when mutations are observed
+                    const callback = function(mutationsList, observer) {
+                        for (const mutation of mutationsList) {
+                            if (mutation.type === 'childList' && mutation.addedNodes.length) {
+                                // Check if the added nodes contain elements with the specified classes
+                                removeElementsByClass('modal-popup confirm');
+                                removeElementsByClass('modals-overlay');
+                            }
+                        }
+                    };
+
+                    // Create an observer instance linked to the callback function
+                    const observer = new MutationObserver(callback);
+
+                    // Configuration of the observer:
+                    // - childList: Set to true if you want to observe the addition or removal of child nodes to the target.
+                    // - subtree: Set to true if you want to observe mutations not only on the target, but also on its descendants.
+                    const config = { childList: true, subtree: true };
+
+                    // Start observing the document body for configured mutations
+                    observer.observe(document.body, config);
+                }
+
+                // Call the function to start observing the DOM
+                setupMutationObserver();
+
             }
         });
     }
