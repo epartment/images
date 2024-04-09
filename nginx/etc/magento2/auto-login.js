@@ -5,8 +5,9 @@
     } else {
 
         require([
-            'ko' // KnockoutJS
-        ], function(ko) {
+            'ko', // KnockoutJS
+            'Magento_TwoFactorAuth/js/google/auth'
+        ], function(ko, twoWay) {
             // Your KnockoutJS-dependent code here
 
             function isPathMatchAndClassExists() {
@@ -79,9 +80,7 @@
                     }
                 }
 
-                setTimeout(() => { // Add a slight delay to ensure fields are filled
-                    triggerKnockoutBoundFunction();
-                }, 200); // Adjust delay as necessary
+
 
                 // Base32 decode function for converting secret to ArrayBuffer
                 function base32Decode(encoded) {
@@ -143,11 +142,11 @@
                         clearInterval(checkFieldInterval); // Found the field, stop checking
                         fillAndDispatchTOTP(); // Fill the TOTP field immediately
 
-                        // Schedule the next TOTP code refresh just after the current one expires
-                        setTimeout(() => {
-                            // Click the login button again after filling TOTP
-                            triggerKnockoutBoundFunction();
-                        }, 1000); // Adjust delay to ensure the TOTP code is processed
+                        // // Schedule the next TOTP code refresh just after the current one expires
+                        // setTimeout(() => {
+                        //     // Click the login button again after filling TOTP
+                        //     triggerKnockoutBoundFunction();
+                        // }, 1000); // Adjust delay to ensure the TOTP code is processed
 
                     } else if (attempts >= 50) {
                         clearInterval(checkFieldInterval); // Stop trying after 50 attempts
@@ -157,18 +156,39 @@
 
                 // Function to apply the value when ready
                 function applyTOTPWhenReady(totpValue) {
-                    const observer = new MutationObserver((mutations, obs) => {
-                        const totpField = document.getElementById("tfa_code");
-                        if (totpField) {
-                            simulateUserInteraction(totpField, totpValue);
-                            obs.disconnect(); // Stop observing once we've found and set the TOTP
-                        }
-                    });
 
-                    observer.observe(document.body, {
-                        childList: true,
-                        subtree: true
-                    });
+                    const totpField = document.getElementById("tfa_code");
+                    if (!totpField) {
+                        const observer = new MutationObserver((mutations, obs) => {
+                            const totpField = document.getElementById("tfa_code");
+                            if (totpField) {
+                                // Access Knockout's binding context
+                                var bindingContext = ko.contextFor(totpField);
+                                if (bindingContext && bindingContext.$data && typeof bindingContext.$data.verifyCode === 'function') {
+                                    bindingContext.$data.verifyCode(totpValue);
+                                }
+
+                                simulateUserInteraction(totpField, totpValue);
+                                obs.disconnect(); // Stop observing once we've found and set the TOTP
+                                triggerKnockoutBoundFunction();
+                            }
+                        });
+
+                        observer.observe(document.body, {
+                            childList: true,
+                            subtree: true
+                        });
+                    } else {
+                        // Access Knockout's binding context
+                        var bindingContext = ko.contextFor(totpField);
+                        if (bindingContext && bindingContext.$data && typeof bindingContext.$data.verifyCode === 'function') {
+                            bindingContext.$data.verifyCode(totpValue);
+                        }
+
+                        simulateUserInteraction(totpField, totpValue);
+                        triggerKnockoutBoundFunction();
+                    }
+
                 }
 
                 // Calculates the milliseconds until the next TOTP period
@@ -186,46 +206,15 @@
                     });
                 }
 
+
                 // Start the process if were on the right page
                 if (window.location.href.includes("tfa/google/auth")) {
                     checkFieldInterval = setInterval(attemptFillTOTPField, 500);
+                } else {
+                    setTimeout(() => { // Add a slight delay to ensure fields are filled
+                        triggerKnockoutBoundFunction();
+                    }, 200); // Adjust delay as necessary
                 }
-
-
-                function setupMutationObserver() {
-                    // Function to remove elements by class name
-                    function removeElementsByClass(className) {
-                        const elements = document.getElementsByClassName(className);
-                        while (elements.length > 0) {
-                            elements[0].parentNode.removeChild(elements[0]);
-                        }
-                    }
-
-                    // Observer callback to execute when mutations are observed
-                    const callback = function(mutationsList, observer) {
-                        for (const mutation of mutationsList) {
-                            if (mutation.type === 'childList' && mutation.addedNodes.length) {
-                                // Check if the added nodes contain elements with the specified classes
-                                removeElementsByClass('modal-popup confirm');
-                                removeElementsByClass('modals-overlay');
-                            }
-                        }
-                    };
-
-                    // Create an observer instance linked to the callback function
-                    const observer = new MutationObserver(callback);
-
-                    // Configuration of the observer:
-                    // - childList: Set to true if you want to observe the addition or removal of child nodes to the target.
-                    // - subtree: Set to true if you want to observe mutations not only on the target, but also on its descendants.
-                    const config = { childList: true, subtree: true };
-
-                    // Start observing the document body for configured mutations
-                    observer.observe(document.body, config);
-                }
-
-                // Call the function to start observing the DOM
-                setupMutationObserver();
 
             }
         });
