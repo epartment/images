@@ -8,7 +8,6 @@
             'ko', // KnockoutJS
             'jquery',
             'Magento_Ui/js/modal/alert',
-            'Magento_TwoFactorAuth/js/google/auth',
         ], function(ko, $, alert) {
             // Your KnockoutJS-dependent code here
 
