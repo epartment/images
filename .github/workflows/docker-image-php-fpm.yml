@@ -66,7 +66,7 @@ jobs:
       matrix: ${{fromJson(needs.php-matrix.outputs.matrix)}}
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v2
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
@@ -126,7 +126,7 @@ jobs:
       matrix: ${{fromJson(needs.node-matrix.outputs.matrix)}}
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v2
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
@@ -188,7 +188,7 @@ jobs:
       matrix: ${{fromJson(needs.full-matrix.outputs.matrix)}}
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v2
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
@@ -279,7 +279,7 @@ jobs:
       matrix: ${{fromJson(needs.full-matrix.outputs.matrix)}}
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v2
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
@@ -365,7 +365,7 @@ jobs:
       matrix: ${{fromJson(needs.full-matrix.outputs.matrix)}}
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v2
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
@@ -456,7 +456,7 @@ jobs:
       matrix: ${{fromJson(needs.full-matrix.outputs.matrix)}}
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v2
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
@@ -543,7 +543,7 @@ jobs:
       matrix: ${{fromJson(needs.full-matrix.outputs.matrix)}}
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v2
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
@@ -634,7 +634,7 @@ jobs:
       matrix: ${{fromJson(needs.full-matrix.outputs.matrix)}}
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v2
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
@@ -721,7 +721,7 @@ jobs:
       matrix: ${{fromJson(needs.full-matrix.outputs.matrix)}}
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v2
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
