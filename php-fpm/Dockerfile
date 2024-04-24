@@ -52,6 +52,9 @@ RUN chmod +x /usr/local/bin/install-php-extensions && install-php-extensions \
     xsl \
     zip;
 
+# If PHP < 8.3 install imagick
+RUN if [ "$(printf "8.3\n${PHP_VERSION}" | sort -g | head -n1)" != "8.3" ]; \
+    then install-php-extensions imagick; fi
 
 # If PHP < 8.2 install mcrypt
 RUN if [ "$(printf "8.2\n${PHP_VERSION}" | sort -g | head -n1)" != "8.2" ]; \
