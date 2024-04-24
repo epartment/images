@@ -17,15 +17,13 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - "3.2"
-          - "4.0"
-          - "5.0"
           - "6.0"
           - "6.2"
           - "7.0"
-        include:
-          - version: "7.2"
-            modifier: "-rc"
+          - "7.2"
+#        include:
+#          - version: "7.2"
+#            modifier: "-rc"
 
 
     steps:
