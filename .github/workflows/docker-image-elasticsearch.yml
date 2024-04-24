@@ -18,6 +18,8 @@ jobs:
       matrix:
         version:
           - "7.17"
+          - "8.11"
+          - "8.12"
           - "8.13"
 
     steps:
