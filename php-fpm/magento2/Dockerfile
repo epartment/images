@@ -4,7 +4,18 @@ FROM ${ENV_SOURCE_IMAGE}:${PHP_VERSION}
 USER root
 
 # Magerun
+
 ADD https://files.magerun.net/n98-magerun2.phar /usr/local/bin/n98-magerun2
+
+# overwrite n98-magerun2 for specific version of PHP if needed
+# If PHP = 7.3
+RUN if [ "${PHP_VERSION}" = "7.3" ]; \
+    then curl https://files.magerun.net/n98-magerun2-6.1.1.phar -o /usr/local/bin/n98-magerun2; fi
+
+# If PHP < 7.3
+RUN if [ "$(printf "7.3\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{print $1"."$2}')" != "7.3" ]; \
+    then curl https://files.magerun.net/n98-magerun2-4.7.0.phar -o /usr/local/bin/n98-magerun2; fi
+
 RUN chmod +rx /usr/local/bin/n98-magerun2 \
     && ln -s /usr/local/bin/n98-magerun2 /usr/local/bin/n98-magerun \
     && ln -s /usr/local/bin/n98-magerun2 /usr/local/bin/magerun2 \
