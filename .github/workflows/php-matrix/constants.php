@@ -13,7 +13,7 @@ CONST PHP_VERSIONS_OS_RELEASE = [
     '8.2' => 'bullseye'
 ];
 const NODE_LATEST = '19';
-const NODE_VERSIONS = ['10', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21'];
+const NODE_VERSIONS = ['10', '12', '13', '14', '15', '16', '17', '19', '20', '21'];
 const NODE_VERSIONS_OS_RELEASE = [
     '10' => 'stretch',
     '12' => 'bullseye',
