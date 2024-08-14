@@ -87,7 +87,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
         if: ${{ !env.ACT }}
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         with:
           file: php-fpm/Dockerfile
           context: php-fpm/context
@@ -101,7 +101,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm:${{ matrix.php_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm:${{ matrix.php_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.latest }}
         with:
           file: php-fpm/Dockerfile
@@ -147,7 +147,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
         if: ${{ !env.ACT }}
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         with:
           file: php-fpm/node/Dockerfile
           context: php-fpm/context
@@ -162,7 +162,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.latest }}
         with:
           file: php-fpm/node/Dockerfile
@@ -209,7 +209,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
         if: ${{ !env.ACT }}
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version!='x' }}
         with:
           file: php-fpm/xdebug3/Dockerfile
@@ -224,7 +224,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version=='x' }}
         with:
           file: php-fpm/xdebug3/Dockerfile
@@ -239,7 +239,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version!='x' && matrix.latest }}
         with:
           file: php-fpm/xdebug3/Dockerfile
@@ -254,7 +254,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version=='x' && matrix.latest }}
         with:
           file: php-fpm/xdebug3/Dockerfile
@@ -300,7 +300,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
         if: ${{ !env.ACT }}
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version!='x' }}
         with:
           file: php-fpm/magento1/Dockerfile
@@ -314,7 +314,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento1:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento1:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version=='x' }}
         with:
           file: php-fpm/magento1/Dockerfile
@@ -328,7 +328,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento1:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento1:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version!='x' && matrix.latest }}
         with:
           file: php-fpm/magento1/Dockerfile
@@ -342,7 +342,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento1:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento1:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version=='x' && matrix.latest }}
         with:
           file: php-fpm/magento1/Dockerfile
@@ -386,7 +386,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
         if: ${{ !env.ACT }}
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version!='x' }}
         with:
           file: php-fpm/magento1/xdebug3/Dockerfile
@@ -401,7 +401,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento1-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento1-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version=='x' }}
         with:
           file: php-fpm/magento1/xdebug3/Dockerfile
@@ -416,7 +416,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento1-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento1-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version!='x' && matrix.latest }}
         with:
           file: php-fpm/magento1/xdebug3/Dockerfile
@@ -431,7 +431,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento1-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento1-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version=='x' && matrix.latest }}
         with:
           file: php-fpm/magento1/xdebug3/Dockerfile
@@ -477,7 +477,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
         if: ${{ !env.ACT }}
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version!='x' }}
         with:
           file: php-fpm/magento2/Dockerfile
@@ -491,7 +491,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento2:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento2:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version=='x' }}
         with:
           file: php-fpm/magento2/Dockerfile
@@ -505,7 +505,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento2:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento2:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version!='x' && matrix.latest }}
         with:
           file: php-fpm/magento2/Dockerfile
@@ -519,7 +519,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento2:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento2:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version=='x' && matrix.latest }}
         with:
           file: php-fpm/magento2/Dockerfile
@@ -564,7 +564,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
         if: ${{ !env.ACT }}
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version!='x' }}
         with:
           file: php-fpm/magento2/xdebug3/Dockerfile
@@ -579,7 +579,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento2-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento2-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version=='x' }}
         with:
           file: php-fpm/magento2/xdebug3/Dockerfile
@@ -594,7 +594,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento2-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento2-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version!='x' && matrix.latest }}
         with:
           file: php-fpm/magento2/xdebug3/Dockerfile
@@ -609,7 +609,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento2-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-magento2-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version=='x' && matrix.latest }}
         with:
           file: php-fpm/magento2/xdebug3/Dockerfile
@@ -655,7 +655,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
         if: ${{ !env.ACT }}
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version!='x' }}
         with:
           file: php-fpm/wordpress/Dockerfile
@@ -669,7 +669,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-wordpress:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-wordpress:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version=='x' }}
         with:
           file: php-fpm/wordpress/Dockerfile
@@ -683,7 +683,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-wordpress:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-wordpress:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version!='x' && matrix.latest }}
         with:
           file: php-fpm/wordpress/Dockerfile
@@ -697,7 +697,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-wordpress:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-wordpress:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version=='x' && matrix.latest }}
         with:
           file: php-fpm/wordpress/Dockerfile
@@ -742,7 +742,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
         if: ${{ !env.ACT }}
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version!='x' }}
         with:
           file: php-fpm/wordpress/xdebug3/Dockerfile
@@ -757,7 +757,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-wordpress-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-wordpress-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version=='x' }}
         with:
           file: php-fpm/wordpress/xdebug3/Dockerfile
@@ -772,7 +772,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-wordpress-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-wordpress-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version!='x' && matrix.latest }}
         with:
           file: php-fpm/wordpress/xdebug3/Dockerfile
@@ -787,7 +787,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-wordpress-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/php-fpm-wordpress-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         if: ${{ matrix.node_version=='x' && matrix.latest }}
         with:
           file: php-fpm/wordpress/xdebug3/Dockerfile
