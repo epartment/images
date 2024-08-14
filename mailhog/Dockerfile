@@ -1,4 +1,4 @@
-FROM golang:1.22.0-alpine as builder
+FROM golang:1.23.0-alpine as builder
 
 # Install MailHog:
 RUN apk --no-cache add --virtual build-dependencies \
