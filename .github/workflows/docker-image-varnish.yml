@@ -61,7 +61,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: VARNISH_VERSION=${{ env.VARNISH_VERSION }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/varnish:${{ matrix.version }}, rollupdev/varnish:${{ matrix.version }}
+          tags: ghcr.io/${{ github.repository_owner }}/varnish:${{ matrix.version }}
         if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}
 
   varnish-lts:
@@ -110,7 +110,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: VARNISH_VERSION=${{ env.VARNISH_VERSION }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/varnish:${{ matrix.version }}, rollupdev/varnish:${{ matrix.version }}
+          tags: ghcr.io/${{ github.repository_owner }}/varnish:${{ matrix.version }}
         if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}
 
   varnish-legacy:
@@ -153,5 +153,5 @@ jobs:
           platforms: linux/amd64, linux/arm64
           build-args: VARNISH_VERSION=${{ env.VARNISH_VERSION }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/varnish:${{ matrix.version }}, rollupdev/varnish:${{ matrix.version }}
+          tags: ghcr.io/${{ github.repository_owner }}/varnish:${{ matrix.version }}
         if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}

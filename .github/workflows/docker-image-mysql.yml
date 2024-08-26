@@ -56,7 +56,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: MYSQL_VERSION=${{ env.MYSQL_VERSION }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/mysql:${{ matrix.version }}, rollupdev/mysql:${{ matrix.version }}
+          tags: ghcr.io/${{ github.repository_owner }}/mysql:${{ matrix.version }}
         if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}
 
   mysql-legacy:
@@ -106,5 +106,5 @@ jobs:
           platforms: linux/amd64
           build-args: MYSQL_VERSION=${{ env.MYSQL_VERSION }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/mysql:${{ matrix.version }}, rollupdev/mysql:${{ matrix.version }}
+          tags: ghcr.io/${{ github.repository_owner }}/mysql:${{ matrix.version }}
         if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}
