@@ -6,7 +6,7 @@ RUN apt-get update  \
   && go install github.com/jpillora/webproc@v0.4.0
 
 FROM debian:bullseye-slim
-LABEL maintainer="rick@dockergiant.com"
+LABEL maintainer="support@epartment.nl"
 # webproc release settings
 COPY --from=builder /root/gocode/bin/webproc /usr/local/bin
 # fetch dnsmasq and webproc binary
