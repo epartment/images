@@ -18,6 +18,8 @@ jobs:
       fail-fast: false
       matrix:
         version:
+          - "10.3"
+          - "10.4"
           - "11.3"
         include:
           - version: "11.4"
