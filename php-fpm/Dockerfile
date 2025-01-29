@@ -21,7 +21,8 @@ ENV ADD_PHP_EXT     ""
 COPY --from=mhs-builder /go/bin/mhsendmail /usr/local/bin/mhsendmail
 
 # Add Ondrej PHP
-RUN apt-get -y install apt-transport-https lsb-release ca-certificates wget && \
+RUN apt-get update && \
+    apt-get -y install apt-transport-https lsb-release ca-certificates wget && \
     wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg && \
     sh -c 'echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
 
