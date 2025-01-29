@@ -2,9 +2,9 @@ ARG ENV_SOURCE_IMAGE
 ARG PHP_VERSION
 ARG OS_RELEASE
 
-FROM golang:bullseye AS mhs-builder
+#FROM golang:bullseye AS mhs-builder
 # Install necessary dependencies
-RUN go install github.com/mailhog/mhsendmail@latest
+RUN #go install github.com/mailhog/mhsendmail@latest
 
 FROM ${ENV_SOURCE_IMAGE:-php}:${PHP_VERSION}-fpm-${OS_RELEASE:-bullseye}
 USER root
@@ -18,7 +18,7 @@ ENV OSTYPE          darwin220
 ENV ADD_PHP_EXT     ""
 
 # Copy mhsendmail to PHP
-COPY --from=mhs-builder /go/bin/mhsendmail /usr/local/bin/mhsendmail
+#COPY --from=mhs-builder /go/bin/mhsendmail /usr/local/bin/mhsendmail
 
 # Install PHP Extension Installer
 ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
