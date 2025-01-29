@@ -21,7 +21,7 @@ ENV ADD_PHP_EXT     ""
 COPY --from=mhs-builder /go/bin/mhsendmail /usr/local/bin/mhsendmail
 
 # Install PHP extensions
-RUN apt-get update && apt-get install software-properties-common && add-apt-repository ppa:ondrej/php && apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install software-properties-common && add-apt-repository ppa:ondrej/php && apt-get update && apt-get -y install \
     php${PHP_VERSION}-dev \
     php${PHP_VERSION}-apcu \
     php${PHP_VERSION}-amqp \
@@ -41,11 +41,11 @@ RUN apt-get update && apt-get install software-properties-common && add-apt-repo
 
 # If PHP < 8.3 install imagick
 RUN if [ "$(printf "8.3\n${PHP_VERSION}" | sort -g | head -n1)" != "8.3" ]; \
-    then apt-get install -y php${PHP_VERSION}-imagick; fi
+    then apt-get -y install php${PHP_VERSION}-imagick; fi
 
 # If PHP < 8.2 install mcrypt
 RUN if [ "$(printf "8.2\n${PHP_VERSION}" | sort -g | head -n1)" != "8.2" ]; \
-    then apt-get install -y php${PHP_VERSION}-mcrypt; fi
+    then apt-get -y install php${PHP_VERSION}-mcrypt; fi
 
 # Install helpful utilities
 RUN set -eux; \
