@@ -20,8 +20,13 @@ ENV ADD_PHP_EXT     ""
 # Copy mhsendmail to PHP
 COPY --from=mhs-builder /go/bin/mhsendmail /usr/local/bin/mhsendmail
 
+# Add Ondrej PHP
+RUN apt-get -y install apt-transport-https lsb-release ca-certificates wget && \
+    wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg && \
+    sh -c 'echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
+
 # Install PHP extensions
-RUN apt-get update && apt-get -y install software-properties-common && add-apt-repository ppa:ondrej/php && apt-get update && apt-get -y install \
+RUN apt-get update && apt-get -y install \
     php${PHP_VERSION}-dev \
     php${PHP_VERSION}-apcu \
     php${PHP_VERSION}-amqp \
