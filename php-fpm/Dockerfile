@@ -21,7 +21,7 @@ ENV ADD_PHP_EXT     ""
 COPY --from=mhs-builder /go/bin/mhsendmail /usr/local/bin/mhsendmail
 
 # Install PHP extensions
-RUN add-apt-repository ppa:ondrej/php && apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install software-properties-common && add-apt-repository ppa:ondrej/php && apt-get update && apt-get install -y \
     php${PHP_VERSION}-dev \
     php${PHP_VERSION}-apcu \
     php${PHP_VERSION}-amqp \
