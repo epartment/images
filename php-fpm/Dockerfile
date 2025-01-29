@@ -20,38 +20,36 @@ ENV ADD_PHP_EXT     ""
 # Copy mhsendmail to PHP
 COPY --from=mhs-builder /go/bin/mhsendmail /usr/local/bin/mhsendmail
 
-# Add Ondrej PHP
-RUN apt-get update && \
-    apt-get -y install apt-transport-https lsb-release ca-certificates wget && \
-    wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg && \
-    sh -c 'echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
+# Install PHP Extension Installer
+ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
 
-# Install PHP extensions
-RUN apt-get update && apt-get -y install \
-    php${PHP_VERSION}-dev \
-    php${PHP_VERSION}-apcu \
-    php${PHP_VERSION}-amqp \
-    php${PHP_VERSION}-bcmath \
-    php${PHP_VERSION}-calendar \
-    php${PHP_VERSION}-exif \
-    php${PHP_VERSION}-gd \
-    php${PHP_VERSION}-intl \
-    php${PHP_VERSION}-imap \
-    php${PHP_VERSION}-mysqli \
-    php${PHP_VERSION}-mysql \
-    php${PHP_VERSION}-redis \
-    php${PHP_VERSION}-soap \
-    php${PHP_VERSION}-sockets \
-    php${PHP_VERSION}-xsl \
-    php${PHP_VERSION}-zip
+# Install PHP Extensions required by Magento OS, Adobe Commerce, and the UCT (pcntl)
+RUN install-php-extensions \
+    apcu \
+    amqp \
+    bcmath \
+    calendar \
+    exif \
+    gd \
+    intl \
+    imap \
+    mysqli \
+    pcntl \
+    pdo_mysql \
+    redis \
+    soap \
+    sockets \
+    sodium \
+    xsl \
+    zip;
 
 # If PHP < 8.3 install imagick
 RUN if [ "$(printf "8.3\n${PHP_VERSION}" | sort -g | head -n1)" != "8.3" ]; \
-    then apt-get -y install php${PHP_VERSION}-imagick; fi
+    then install-php-extensions imagick; fi
 
 # If PHP < 8.2 install mcrypt
 RUN if [ "$(printf "8.2\n${PHP_VERSION}" | sort -g | head -n1)" != "8.2" ]; \
-    then apt-get -y install php${PHP_VERSION}-mcrypt; fi
+    then install-php-extensions mcrypt; fi
 
 # Install helpful utilities
 RUN set -eux; \
