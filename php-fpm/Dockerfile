@@ -17,39 +17,27 @@ ENV GROUP_ID        20
 ENV OSTYPE          darwin220
 ENV ADD_PHP_EXT     ""
 
-# PHP Extension Installer
-ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
-
 # Copy mhsendmail to PHP
 COPY --from=mhs-builder /go/bin/mhsendmail /usr/local/bin/mhsendmail
 
-# If PHP = 7.0 | debs are archived so use those
-RUN if [ "${PHP_VERSION}" = "7.0" ]; \
-    then printf "deb http://archive.debian.org/debian/ stretch main\ndeb-src http://archive.debian.org/debian/ stretch main" > /etc/apt/sources.list; \
-    apt-get update -y; \
-    apt-get install -y --no-install-recommends \
-    python \
-    python-pip; fi
-
-# Install PHP Extensions required by Magento OS, Adobe Commerce, and the UCT (pcntl)
-RUN chmod +x /usr/local/bin/install-php-extensions && install-php-extensions \
-    apcu \
-    amqp \
-    bcmath \
-    calendar \
-    exif \
-    gd \
-    intl \
-    imap \
-    mysqli \
-    pcntl \
-    pdo_mysql \
-    redis \
-    soap \
-    sockets \
-    sodium \
-    xsl \
-    zip;
+# Install PHP extensions
+RUN apt-get update && apt-get install -y \
+    php${PHP_VERSION}-dev \
+    php${PHP_VERSION}-apcu \
+    php${PHP_VERSION}-amqp \
+    php${PHP_VERSION}-bcmath \
+    php${PHP_VERSION}-calendar \
+    php${PHP_VERSION}-exif \
+    php${PHP_VERSION}-gd \
+    php${PHP_VERSION}-intl \
+    php${PHP_VERSION}-imap \
+    php${PHP_VERSION}-mysqli \
+    php${PHP_VERSION}-mysql \
+    php${PHP_VERSION}-redis \
+    php${PHP_VERSION}-soap \
+    php${PHP_VERSION}-sockets \
+    php${PHP_VERSION}-xsl \
+    php${PHP_VERSION}-zip
 
 # If PHP < 8.3 install imagick
 RUN if [ "$(printf "8.3\n${PHP_VERSION}" | sort -g | head -n1)" != "8.3" ]; \
