@@ -3,8 +3,11 @@ ARG PHP_VERSION
 ARG OS_RELEASE
 
 FROM golang:bullseye AS mhs-builder
-RUN go install github.com/mailhog/mhsendmail@latest
-
+# Install necessary dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    build-essential \
+    && go install github.com/mailhog/mhsendmail@latest
 
 FROM ${ENV_SOURCE_IMAGE:-php}:${PHP_VERSION}-fpm-${OS_RELEASE:-bullseye}
 USER root
