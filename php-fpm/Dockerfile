@@ -2,7 +2,7 @@ ARG ENV_SOURCE_IMAGE
 ARG PHP_VERSION
 ARG OS_RELEASE
 
-FROM golang:bullseye AS mhs-builder
+FROM golang:alpine AS mhs-builder
 RUN go install github.com/axllent/mailpit/sendmail@latest
 
 
