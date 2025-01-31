@@ -2,9 +2,9 @@ ARG ENV_SOURCE_IMAGE
 ARG PHP_VERSION
 ARG OS_RELEASE
 
-#FROM golang:bullseye AS mhs-builder
-# Install necessary dependencies
-#RUN go install github.com/mailhog/mhsendmail@latest
+FROM golang:bullseye AS mhs-builder
+RUN go install github.com/mailhog/mhsendmail@latest
+
 
 FROM ${ENV_SOURCE_IMAGE:-php}:${PHP_VERSION}-fpm-${OS_RELEASE:-bullseye}
 USER root
@@ -17,34 +17,39 @@ ENV GROUP_ID        20
 ENV OSTYPE          darwin220
 ENV ADD_PHP_EXT     ""
 
+# PHP Extension Installer
+ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
+
 # Copy mhsendmail to PHP
-#COPY --from=mhs-builder /go/bin/mhsendmail /usr/local/bin/mhsendmail
+COPY --from=mhs-builder /go/bin/mhsendmail /usr/local/bin/mhsendmail
 
-# Install PHP Extension Installer
-ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
-
-# Due to an issue with bcmath we update the libpthread-stubs0-dev package
-RUN apt-get update && apt-get install -y \
-    libpthread-stubs0-dev
+# If PHP = 7.0 | debs are archived so use those
+RUN if [ "${PHP_VERSION}" = "7.0" ]; \
+    then printf "deb http://archive.debian.org/debian/ stretch main\ndeb-src http://archive.debian.org/debian/ stretch main" > /etc/apt/sources.list; \
+    apt-get update -y; \
+    apt-get install -y --no-install-recommends \
+    python \
+    python-pip; fi
 
 # Install PHP Extensions required by Magento OS, Adobe Commerce, and the UCT (pcntl)
-RUN install-php-extensions apcu;
-RUN install-php-extensions amqp;
-RUN install-php-extensions bcmath;
-RUN install-php-extensions calendar;
-RUN install-php-extensions exif;
-RUN install-php-extensions gd;
-RUN install-php-extensions intl;
-RUN install-php-extensions imap;
-RUN install-php-extensions mysqli;
-RUN install-php-extensions pcntl;
-RUN install-php-extensions pdo_mysql;
-RUN install-php-extensions redis;
-RUN install-php-extensions soap;
-RUN install-php-extensions sockets;
-RUN install-php-extensions sodium;
-RUN install-php-extensions xsl;
-RUN install-php-extensions zip;
+RUN chmod +x /usr/local/bin/install-php-extensions && install-php-extensions \
+    apcu \
+    amqp \
+    bcmath \
+    calendar \
+    exif \
+    gd \
+    intl \
+    imap \
+    mysqli \
+    pcntl \
+    pdo_mysql \
+    redis \
+    soap \
+    sockets \
+    sodium \
+    xsl \
+    zip;
 
 # If PHP < 8.3 install imagick
 RUN if [ "$(printf "8.3\n${PHP_VERSION}" | sort -g | head -n1)" != "8.3" ]; \
