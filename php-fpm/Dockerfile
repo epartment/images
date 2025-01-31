@@ -21,7 +21,7 @@ ENV ADD_PHP_EXT     ""
 ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
 
 # Copy mhsendmail to PHP
-COPY --from=mhs-builder /go/bin/mhsendmail /usr/local/bin/mhsendmail
+COPY --from=mhs-builder /go/bin/sendmail /usr/local/bin/mhsendmail
 
 # If PHP = 7.0 | debs are archived so use those
 RUN if [ "${PHP_VERSION}" = "7.0" ]; \
