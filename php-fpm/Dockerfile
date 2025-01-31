@@ -24,24 +24,23 @@ ENV ADD_PHP_EXT     ""
 ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
 
 # Install PHP Extensions required by Magento OS, Adobe Commerce, and the UCT (pcntl)
-RUN install-php-extensions \
-    apcu \
-    amqp \
-    bcmath \
-    calendar \
-    exif \
-    gd \
-    intl \
-    imap \
-    mysqli \
-    pcntl \
-    pdo_mysql \
-    redis \
-    soap \
-    sockets \
-    sodium \
-    xsl \
-    zip;
+RUN install-php-extensions apcu;
+RUN install-php-extensions amqp;
+RUN install-php-extensions bcmath;
+RUN install-php-extensions calendar;
+RUN install-php-extensions exif;
+RUN install-php-extensions gd;
+RUN install-php-extensions intl;
+RUN install-php-extensions imap;
+RUN install-php-extensions mysqli;
+RUN install-php-extensions pcntl;
+RUN install-php-extensions pdo_mysql;
+RUN install-php-extensions redis;
+RUN install-php-extensions soap;
+RUN install-php-extensions sockets;
+RUN install-php-extensions sodium;
+RUN install-php-extensions xsl;
+RUN install-php-extensions zip;
 
 # If PHP < 8.3 install imagick
 RUN if [ "$(printf "8.3\n${PHP_VERSION}" | sort -g | head -n1)" != "8.3" ]; \
