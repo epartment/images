@@ -23,6 +23,10 @@ ENV ADD_PHP_EXT     ""
 # Install PHP Extension Installer
 ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
 
+# Due to an issue with bcmath we update the libpthread-stubs0-dev package
+RUN apt-get update && apt-get install -y \
+    libpthread-stubs0-dev
+
 # Install PHP Extensions required by Magento OS, Adobe Commerce, and the UCT (pcntl)
 RUN install-php-extensions apcu;
 RUN install-php-extensions amqp;
