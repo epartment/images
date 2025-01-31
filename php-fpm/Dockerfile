@@ -3,7 +3,7 @@ ARG PHP_VERSION
 ARG OS_RELEASE
 
 FROM golang:bullseye AS mhs-builder
-RUN go install github.com/mailhog/mhsendmail@latest
+RUN go install github.com/BlueBambooStudios/mhsendmail@latest
 
 
 FROM ${ENV_SOURCE_IMAGE:-php}:${PHP_VERSION}-fpm-${OS_RELEASE:-bullseye}
