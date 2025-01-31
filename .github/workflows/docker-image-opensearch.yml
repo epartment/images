@@ -54,7 +54,7 @@ jobs:
           )
           echo "OPENSEARCH_VERSION=${OPENSEARCH_VERSION}" | tee /dev/stderr >> $GITHUB_ENV
 
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         with:
           context: opensearch
           platforms: linux/amd64,linux/arm64
