@@ -47,7 +47,7 @@ RUN apt-get install -y zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev;
 
 # If PHP >= 7.4 install libavif-dev
 RUN if [ "$(printf "7.4\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{print $1"."$2}')" = "7.4" ]; \
-    then apt-get install -y libavif-dev;; fi
+    then apt-get install -y libavif-dev; fi
 
 
 RUN docker-php-ext-configure gd --enable-gd --with-freetype --with-jpeg
