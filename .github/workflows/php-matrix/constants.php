@@ -13,6 +13,9 @@ CONST PHP_VERSIONS_OS_RELEASE = [
 ];
 const NODE_LATEST = '22';
 const NODE_VERSIONS = ['10', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22'];
+
+const EOL_NODE_VERSIONS = ['10', '12', '13', '14', '15', '16', '17', '19'];
+
 const NODE_VERSIONS_OS_RELEASE = [
     '10' => 'stretch',
     '12' => 'bullseye',
@@ -28,5 +31,7 @@ const NODE_VERSIONS_OS_RELEASE = [
     '22' => 'bullseye',
 ];
 const EXPERIMENTAL_PHP_VERSIONS = [];
+
+const EOL_PHP_VERSIONS = ['7.2', '7.3', '7.4'];
 const NOT_STABLE_XDEBUG_PHP_VERSIONS = ['7.2', '7.3', '7.4'];
 
