@@ -17,7 +17,7 @@ foreach (PHP_VERSIONS as $phpVersion) {
         'xdebug_type' => $xdebugType,
         'experimental' => $experimental,
         'end_of_life' => $endOfLife,
-        'continue_on_error' => $endOfLife || $experimental,
+        'continue_on_error' => boolval($endOfLife || $experimental),
         'latest' => $phpVersion === PHP_LATEST,
     ];
     foreach (NODE_VERSIONS as $nodeVersion) {
@@ -31,7 +31,7 @@ foreach (PHP_VERSIONS as $phpVersion) {
             'xdebug_type' => $xdebugType,
             'experimental' => $experimental,
             'end_of_life' => $endOfLife,
-            'continue_on_error' => $endOfLife || $experimental,
+            'continue_on_error' => boolval($endOfLife || $experimental),
             'latest' => $phpVersion === PHP_LATEST && $nodeVersion === NODE_LATEST,
         ];
     }
