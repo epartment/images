@@ -5,7 +5,7 @@ ARG OS_RELEASE="bullseye"
 FROM golang:alpine AS mhs-builder
 RUN go install github.com/axllent/mailpit/sendmail@latest
 
-FROM ${ENV_SOURCE_IMAGE}:${PHP_VERSION}-fpm-${OS_RELEASE}
+FROM --platform=$BUILDPLATFORM ${ENV_SOURCE_IMAGE}:${PHP_VERSION}-fpm-${OS_RELEASE}
 USER root
 ARG PHP_VERSION
 
