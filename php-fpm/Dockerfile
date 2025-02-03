@@ -23,7 +23,7 @@ ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/do
 COPY --from=mhs-builder /go/bin/sendmail /usr/local/bin/mhsendmail
 
 # Install PHP Extensions required by Magento OS, Adobe Commerce, and the UCT (pcntl)
-RUN chmod +x /usr/local/bin/install-php-extensions && install-php-extensions \
+RUN chmod +x /usr/local/bin/install-php-extensions;
 RUN install-php-extensions apcu;
 RUN install-php-extensions amqp;
 RUN install-php-extensions bcmath;
