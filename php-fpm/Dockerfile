@@ -1,12 +1,11 @@
-ARG ENV_SOURCE_IMAGE
+ARG ENV_SOURCE_IMAGE="php"
 ARG PHP_VERSION
-ARG OS_RELEASE
+ARG OS_RELEASE="bullseye"
 
 FROM golang:alpine AS mhs-builder
 RUN go install github.com/axllent/mailpit/sendmail@latest
 
-
-FROM ${ENV_SOURCE_IMAGE:-php}:${PHP_VERSION}-fpm-${OS_RELEASE:-bullseye}
+FROM ${ENV_SOURCE_IMAGE}:${PHP_VERSION}-fpm-${OS_RELEASE}
 USER root
 ARG PHP_VERSION
 
@@ -134,7 +133,7 @@ RUN /usr/bin/pip install segno
 
 RUN mkdir -p /etc/zsh/zshrc.d  \
     && echo "autoload -U compinit; compinit" > /etc/zsh/zshrc.d/completions.zsh \
-    && ln -s /usr/bin/fish /bin/fish \
+    && ln -s /usr/bin/fish /bin/fish
 
 RUN set -eux; \
 	{ \
