@@ -24,22 +24,22 @@ COPY --from=mhs-builder /go/bin/sendmail /usr/local/bin/mhsendmail
 
 # Install PHP Extensions required by Magento OS, Adobe Commerce, and the UCT (pcntl)
 RUN chmod +x /usr/local/bin/install-php-extensions && install-php-extensions \
-    install-php-extensions apcu; \
-    install-php-extensions amqp; \
-    install-php-extensions bcmath; \
-    install-php-extensions calendar; \
-    install-php-extensions exif; \
-    install-php-extensions intl; \
-    install-php-extensions imap; \
-    install-php-extensions mysqli; \
-    install-php-extensions pcntl; \
-    install-php-extensions pdo_mysql; \
-    install-php-extensions redis; \
-    install-php-extensions soap; \
-    install-php-extensions sockets; \
-    install-php-extensions sodium; \
-    install-php-extensions xsl; \
-    install-php-extensions zip;
+RUN install-php-extensions apcu;
+RUN install-php-extensions amqp;
+RUN install-php-extensions bcmath;
+RUN install-php-extensions calendar;
+RUN install-php-extensions exif;
+RUN install-php-extensions intl;
+RUN install-php-extensions imap;
+RUN install-php-extensions mysqli;
+RUN install-php-extensions pcntl;
+RUN install-php-extensions pdo_mysql;
+RUN install-php-extensions redis;
+RUN install-php-extensions soap;
+RUN install-php-extensions sockets;
+RUN install-php-extensions sodium;
+RUN install-php-extensions xsl;
+RUN install-php-extensions zip;
 
 # Since the installation above is not working for gd, we need to install gd this way
 RUN apt-get update -y;
