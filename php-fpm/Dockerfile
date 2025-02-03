@@ -23,8 +23,8 @@ ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/do
 COPY --from=mhs-builder /go/bin/sendmail /usr/local/bin/mhsendmail
 
 # Since the installation below is not working for gd, we need to install gd this way
-RUN apt-get update -y; \
-    apt-get install -y zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev; \
+RUN apt-get update -y;
+RUN apt-get install -y zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev; \
 
 RUN docker-php-ext-configure gd --enable-gd --with-freetype --with-jpeg --with-webp
 RUN docker-php-ext-install gd
