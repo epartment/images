@@ -50,7 +50,12 @@ RUN chmod +x /usr/local/bin/install-php-extensions && install-php-extensions \
     zip;
 
 # Since the installation above is working for gd, we need to install gd this way
-RUN docker-php-ext-install gd
+
+RUN apt-get update -y; \
+    apt-get install -y zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev; \
+
+RUN docker-php-ext-configure gd --enable-gd --with-freetype --with-jpeg --with-webp && \
+    docker-php-ext-install gd
 
 
 # If PHP < 8.3 install imagick
