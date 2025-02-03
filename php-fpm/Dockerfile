@@ -22,13 +22,12 @@ ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/do
 # Copy mhsendmail to PHP
 COPY --from=mhs-builder /go/bin/sendmail /usr/local/bin/mhsendmail
 
-# If PHP = 7.0 | debs are archived so use those
-RUN if [ "${PHP_VERSION}" = "7.0" ]; \
-    then printf "deb http://archive.debian.org/debian/ stretch main\ndeb-src http://archive.debian.org/debian/ stretch main" > /etc/apt/sources.list; \
-    apt-get update -y; \
-    apt-get install -y --no-install-recommends \
-    python \
-    python-pip; fi
+# Since the installation below is not working for gd, we need to install gd this way
+RUN apt-get update -y; \
+    apt-get install -y zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev; \
+
+RUN docker-php-ext-configure gd --enable-gd --with-freetype --with-jpeg --with-webp
+RUN docker-php-ext-install gd
 
 # Install PHP Extensions required by Magento OS, Adobe Commerce, and the UCT (pcntl)
 RUN chmod +x /usr/local/bin/install-php-extensions && install-php-extensions \
@@ -48,15 +47,6 @@ RUN chmod +x /usr/local/bin/install-php-extensions && install-php-extensions \
     sodium \
     xsl \
     zip;
-
-# Since the installation above is working for gd, we need to install gd this way
-
-RUN apt-get update -y; \
-    apt-get install -y zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev; \
-
-RUN docker-php-ext-configure gd --enable-gd --with-freetype --with-jpeg --with-webp
-RUN docker-php-ext-install gd
-
 
 # If PHP < 8.3 install imagick
 RUN if [ "$(printf "8.3\n${PHP_VERSION}" | sort -g | head -n1)" != "8.3" ]; \
