@@ -1,7 +1,7 @@
 <?php
 
-const PHP_LATEST = '8.3';
-const PHP_VERSIONS = ['7.2', '7.3', '7.4', '8.0', '8.1', '8.2', '8.3'];
+const PHP_LATEST = '8.4';
+const PHP_VERSIONS = ['7.2', '7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4'];
 CONST PHP_VERSIONS_OS_RELEASE = [
     '7.2' => 'buster',
     '7.3' => 'bullseye',
@@ -10,6 +10,7 @@ CONST PHP_VERSIONS_OS_RELEASE = [
     '8.1' => 'bullseye',
     '8.2' => 'bullseye',
     '8.3' => 'bullseye',
+    '8.4' => 'bullseye',
 ];
 const NODE_LATEST = '22';
 const NODE_VERSIONS = ['10', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22'];
