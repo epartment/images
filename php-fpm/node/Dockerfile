@@ -10,10 +10,10 @@ RUN mv /opt/yarn* /opt/yarn
 FROM ${ENV_SOURCE_IMAGE}:${PHP_VERSION}
 USER root
 
-# Install ARM libraries
+# Install ARM libraries and libc-bin for ldd command
 RUN dpkg --add-architecture arm64 \
     && apt-get update \
-    && apt-get install -y libc6:arm64 libstdc++6:arm64
+    && apt-get install -y libc6:arm64 libstdc++6:arm64 libc-bin
 
 # Copy Node to PHP
 COPY --from=node /usr/local/include/node /usr/local/include/node
@@ -27,6 +27,7 @@ RUN chmod +x /usr/local/bin/node
 # Debugging step to check node binary
 RUN ls -la /usr/local/bin/node \
     && file /usr/local/bin/node \
+    && ldd /usr/local/bin/node \
     && /usr/local/bin/node -v || echo "Node failed to run"
 
 # Copy PhantomJS
