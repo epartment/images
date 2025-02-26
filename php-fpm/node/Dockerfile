@@ -10,9 +10,12 @@ RUN mv /opt/yarn* /opt/yarn
 FROM ${ENV_SOURCE_IMAGE}:${PHP_VERSION}
 USER root
 
-# Install ARM libraries
-RUN apt-get update \
-    && apt-get install -y libc6 libstdc++6
+# Check if the architecture is ARM and install ARM libraries if true
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+        dpkg --add-architecture arm64 \
+        && apt-get update \
+        && apt-get install -y libc6:arm64 libstdc++6:arm64; \
+    fi
 
 # Copy Node to PHP
 COPY --from=node /usr/local/include/node /usr/local/include/node
@@ -33,4 +36,12 @@ RUN ls -la /usr/local/bin/node \
 COPY --from=99designs/phantomjs:2.1.1 /usr/local/bin/phantomjs /usr/local/bin/phantomjs
 
 RUN ln -s /usr/local/bin/node /usr/local/bin/nodejs \
-    &&
+    && ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s /usr/local/lib/node_modules/gulp/bin/gulp.js /usr/local/bin/gulp \
+    && ln -s /usr/local/lib/node_modules/grunt-cli/bin/grunt /usr/local/bin/grunt \
+    && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+    && ln -s /opt/yarn/bin/yarn /usr/local/bin/yarn \
+    && ln -s /opt/yarn/bin/yarnpkg /usr/local/bin/yarnpkg
+
+# Copy Yarn
+COPY --from=node /opt /opt
