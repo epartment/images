@@ -27,7 +27,6 @@ RUN chmod +x /usr/local/bin/node
 # Debugging step to check node binary
 RUN ls -la /usr/local/bin/node \
     && file /usr/local/bin/node \
-    && ldd /usr/local/bin/node || echo "ldd command not found" \
     && /usr/local/bin/node -v || echo "Node failed to run"
 
 # Copy PhantomJS
