@@ -16,6 +16,11 @@ COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 COPY --from=node /opt /opt
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 
+# Debugging step to check node binary
+RUN ls -la /usr/local/bin/node \
+    && ldd /usr/local/bin/node \
+    && file /usr/local/bin/node
+
 # Copy PhantomJS
 COPY --from=99designs/phantomjs:2.1.1 /usr/local/bin/phantomjs /usr/local/bin/phantomjs
 
