@@ -10,12 +10,10 @@ RUN mv /opt/yarn* /opt/yarn
 FROM ${ENV_SOURCE_IMAGE}:${PHP_VERSION}
 USER root
 
-# Check if the architecture is ARM and install ARM libraries if true
-RUN if [ "$(uname -m)" = "aarch64" ]; then \
-        dpkg --add-architecture arm64 \
-        && apt-get update \
-        && apt-get install -y libc6:arm64 libstdc++6:arm64; \
-    fi
+# Install ARM libraries
+RUN dpkg --add-architecture arm64 \
+    && apt-get update \
+    && apt-get install -y libc6:arm64 libstdc++6:arm64
 
 # Copy Node to PHP
 COPY --from=node /usr/local/include/node /usr/local/include/node
