@@ -5,10 +5,8 @@ on:
     - cron: "0 6 * * *" # 6 AM Daily
   push:
     paths:
-      - .trigger
       - opensearch/**
-      - .github/workflows/*opensearch*
-
+      - .github/workflows/opensearch.yml
 
 jobs:
   opensearch:
@@ -60,6 +58,5 @@ jobs:
           context: opensearch
           platforms: linux/amd64,linux/arm64
           build-args: OPENSEARCH_VERSION=${{ env.OPENSEARCH_VERSION }}
-          push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/opensearch:${{ matrix.version }}
-        if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}
+          push: ${{ github.ref == 'refs/heads/main' && !env.ACT }}
+          tags: ghcr.io/${{ github.repository_owner }}/opensearch:${{ matrix.version }},wardenenv/opensearch:${{matrix.version}}
