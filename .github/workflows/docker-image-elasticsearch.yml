@@ -6,7 +6,7 @@ on:
   push:
     paths:
       - elasticsearch/**
-      - .github/workflows/elasticsearch.yml
+      - .github/workflows/docker-image-elasticsearch.yml
 
 jobs:
   elasticsearch:

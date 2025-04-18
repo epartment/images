@@ -6,7 +6,7 @@ on:
   push:
     paths:
       - mysql/**
-      - .github/workflows/mysql.yml
+      - .github/workflows/docker-image-mysql.yml
 
 jobs:
   mysql:

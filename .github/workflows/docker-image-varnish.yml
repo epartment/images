@@ -6,7 +6,7 @@ on:
   push:
     paths:
       - varnish/**
-      - .github/workflows/varnish.yml
+      - .github/workflows/docker-image-varnish.yml
 
 jobs:
   varnish:

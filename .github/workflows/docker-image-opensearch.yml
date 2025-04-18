@@ -6,7 +6,7 @@ on:
   push:
     paths:
       - opensearch/**
-      - .github/workflows/opensearch.yml
+      - .github/workflows/docker-image-opensearch.yml
 
 jobs:
   opensearch:
