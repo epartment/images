@@ -5,9 +5,8 @@ on:
     - cron: "0 6 * * *" # 6 AM Daily
   push:
     paths:
-      - .trigger
       - varnish/**
-      - .github/workflows/*varnish*
+      - .github/workflows/varnish.yml
 
 jobs:
   varnish:
@@ -25,6 +24,8 @@ jobs:
           - "7.3"
           - "7.4"
           - "7.5"
+          - "7.6"
+          - "7.7"
 
     steps:
       - uses: actions/checkout@v4
@@ -50,7 +51,7 @@ jobs:
         run: |-
           ESCAPED_VERSION="$(echo ${{ matrix.version }} | sed 's/\./\\\./g')"
           VARNISH_VERSION=$(
-            docker run --rm gcr.io/go-containerregistry/crane:v0.8.0 ls varnish \
+            docker run --rm gcr.io/go-containerregistry/crane ls varnish \
             | egrep "^${ESCAPED_VERSION}(\.[0-9]+)?(\.[0-9]+)?(-alpine)?\$" | sort -Vr | head -n1
           )
           echo "VARNISH_VERSION=${VARNISH_VERSION}" | tee /dev/stderr >> $GITHUB_ENV
@@ -60,9 +61,8 @@ jobs:
           context: varnish
           platforms: linux/amd64,linux/arm64
           build-args: VARNISH_VERSION=${{ env.VARNISH_VERSION }}
-          push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/varnish:${{ matrix.version }}
-        if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}
+          push: ${{ github.ref == 'refs/heads/main' && !env.ACT }}
+          tags: ghcr.io/${{ github.repository_owner }}/varnish:${{ matrix.version }},wardenenv/varnish:${{matrix.version}}
 
   varnish-lts:
     name: Varnish LTS
@@ -98,7 +98,7 @@ jobs:
         run: |-
           ESCAPED_VERSION="$(echo ${{ matrix.version }} | sed 's/\./\\\./g')"
           VARNISH_VERSION=$(
-            docker run --rm gcr.io/go-containerregistry/crane:v0.8.0 ls varnish \
+            docker run --rm gcr.io/go-containerregistry/crane ls varnish \
             | egrep "^${ESCAPED_VERSION}(\.[0-9]+)?(\.[0-9]+)?(-alpine)?\$" | sort -Vr | head -n1
           )
           echo "VARNISH_VERSION=${VARNISH_VERSION}" | tee /dev/stderr >> $GITHUB_ENV
@@ -109,6 +109,5 @@ jobs:
           file: varnish/Dockerfile.lts
           platforms: linux/amd64,linux/arm64
           build-args: VARNISH_VERSION=${{ env.VARNISH_VERSION }}
-          push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/varnish:${{ matrix.version }}
-        if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}
+          push: ${{ github.ref == 'refs/heads/main' && !env.ACT }}
+          tags: ghcr.io/${{ github.repository_owner }}/varnish:${{ matrix.version }},wardenenv/varnish:${{matrix.version}}
