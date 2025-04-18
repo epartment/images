@@ -5,9 +5,8 @@ on:
     - cron: "0 6 * * *" # 6 AM Daily
   push:
     paths:
-      - .trigger
       - elasticsearch/**
-      - .github/workflows/*elasticsearch*
+      - .github/workflows/elasticsearch.yml
 
 jobs:
   elasticsearch:
@@ -22,7 +21,6 @@ jobs:
           - "8.11"
           - "8.12"
           - "8.13"
-
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -57,6 +55,5 @@ jobs:
           context: elasticsearch
           platforms: linux/amd64,linux/arm64
           build-args: ES_VERSION=${{ env.ES_VERSION }}
-          push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/elasticsearch:${{ matrix.version }}
-        if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}
+          push: ${{ github.ref == 'refs/heads/main' && !env.ACT }}
+          tags: ghcr.io/${{ github.repository_owner }}/elasticsearch:${{ matrix.version }}, wardenenv/elasticsearch:${{matrix.version}}
