@@ -5,6 +5,7 @@ on:
     - cron: "0 6 * * *" # 6 AM Daily
   push:
     paths:
+      - .trigger
       - opensearch/**
       - .github/workflows/docker-image-opensearch.yml
 
