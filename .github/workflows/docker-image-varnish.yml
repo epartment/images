@@ -62,7 +62,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: VARNISH_VERSION=${{ env.VARNISH_VERSION }}
           push: ${{ github.ref == 'refs/heads/main' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/varnish:${{ matrix.version }},wardenenv/varnish:${{matrix.version}}
+          tags: ghcr.io/${{ github.repository_owner }}/roll/varnish:${{ matrix.version }}
 
   varnish-lts:
     name: Varnish LTS
@@ -110,4 +110,4 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: VARNISH_VERSION=${{ env.VARNISH_VERSION }}
           push: ${{ github.ref == 'refs/heads/main' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/varnish:${{ matrix.version }},wardenenv/varnish:${{matrix.version}}
+          tags: ghcr.io/${{ github.repository_owner }}/roll/varnish:${{ matrix.version }}

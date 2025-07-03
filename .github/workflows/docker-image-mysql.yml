@@ -62,7 +62,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: MYSQL_VERSION=${{ env.MYSQL_VERSION }}
           push: ${{ github.ref == 'refs/heads/main' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/mysql:${{ matrix.version }},wardenenv/mysql:${{matrix.version}}
+          tags: ghcr.io/${{ github.repository_owner }}/roll/mysql:${{ matrix.version }}
   mysql-legacy:
     name: MySQL Legacy
     runs-on: ubuntu-latest
@@ -110,4 +110,4 @@ jobs:
           platforms: linux/amd64
           build-args: MYSQL_VERSION=${{ env.MYSQL_VERSION }}
           push: ${{ github.ref == 'refs/heads/main' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/mysql:${{ matrix.version }},wardenenv/mysql:${{matrix.version}}
+          tags: ghcr.io/${{ github.repository_owner }}/roll/mysql:${{ matrix.version }}
