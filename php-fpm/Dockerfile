@@ -29,6 +29,7 @@ RUN install-php-extensions amqp;
 RUN install-php-extensions bcmath;
 RUN install-php-extensions calendar;
 RUN install-php-extensions exif;
+RUN install-php-extensions ftp;
 RUN install-php-extensions intl;
 RUN install-php-extensions imap;
 RUN install-php-extensions mysqli;
