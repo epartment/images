@@ -33,7 +33,6 @@ RUN install-php-extensions ftp;
 RUN install-php-extensions intl;
 RUN install-php-extensions imap;
 RUN install-php-extensions mysqli;
-RUN install-php-extensions opcache;
 RUN install-php-extensions pcntl;
 RUN install-php-extensions pdo_mysql;
 RUN install-php-extensions redis;
@@ -44,6 +43,7 @@ RUN install-php-extensions xsl;
 RUN install-php-extensions zip;
 
 # If PHP >= 7.4 Since the installation above is not working for gd, we need to install gd this way
+# Also install opcache for PHP >= 7.4
 RUN if [ "$(printf "7.4\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{print $1"."$2}')" = "7.4" ]; \
     then  \
     apt-get update -y; \
@@ -51,6 +51,7 @@ RUN if [ "$(printf "7.4\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{prin
     \
     docker-php-ext-configure gd --enable-gd --with-freetype --with-jpeg; \
     docker-php-ext-install gd; \
+    install-php-extensions opcache; \
     fi
 
 # If PHP < 8.3 install imagick
