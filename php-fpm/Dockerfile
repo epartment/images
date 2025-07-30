@@ -33,6 +33,7 @@ RUN install-php-extensions ftp;
 RUN install-php-extensions intl;
 RUN install-php-extensions imap;
 RUN install-php-extensions mysqli;
+RUN install-php-extensions opcache;
 RUN install-php-extensions pcntl;
 RUN install-php-extensions pdo_mysql;
 RUN install-php-extensions redis;
