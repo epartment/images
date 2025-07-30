@@ -55,7 +55,7 @@ RUN if [ "$(printf "7.4\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{prin
     fi
 
 # If PHP > 7.2 && < 8.3 install imagick
-RUN if [ "$(printf "7.2\n${PHP_VERSION}" | sort -V | tail -n1)" = "${PHP_VERSION}" ] && \
+RUN if [ "$(printf "7.3\n${PHP_VERSION}" | sort -V | tail -n1)" = "${PHP_VERSION}" ] && \
        [ "$(printf "8.3\n${PHP_VERSION}" | sort -V | head -n1)" = "${PHP_VERSION}" ]; \
     then install-php-extensions imagick; fi
 
