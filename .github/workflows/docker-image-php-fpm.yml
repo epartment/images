@@ -111,14 +111,14 @@ jobs:
         shell: bash
         run: |
           mkdir -p ${{ runner.temp }}/digests
-          d="${{ steps.build.outputs.digest }}"              # e.g. sha256:abc...
-          echo "$d" > "${{ runner.temp }}/digests/${{ matrix.php_version }}-${d#sha256:}"           # file named by the hash only
+          digest="${{ steps.build.outputs.digest }}"              # e.g. sha256:abc...
+          touch "${{ runner.temp }}/digests/${{ matrix.php_version }}-${digest#sha256:}"           # file named by the hash only
 
       - name: Upload digest artifact
         if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ matrix.php_version }}-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          name: digests-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}-${{ matrix.php_version }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
