@@ -224,7 +224,7 @@ jobs:
         if: ${{ !env.ACT }}
 
       - uses: docker/build-push-action@v6
-        if: ${{ matrix.node_version!='x' }}
+        id: build
         with:
           file: php-fpm/xdebug3/Dockerfile
           context: php-fpm/context
@@ -237,6 +237,7 @@ jobs:
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-debug:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-debug:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
+        if: ${{ matrix.node_version!='x' }}
 
       - name: Export digest
         if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
