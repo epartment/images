@@ -1,5 +1,7 @@
 <?php
 
+const PLATFORMS = ['linux/amd64', 'linux/arm64'];
+
 const PHP_LATEST = '8.4';
 const PHP_VERSIONS = ['7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4'];
 CONST PHP_VERSIONS_OS_RELEASE = [
