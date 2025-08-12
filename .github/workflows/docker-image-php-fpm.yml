@@ -112,7 +112,7 @@ jobs:
         run: |
           mkdir -p ${{ runner.temp }}/digests
           d="${{ steps.build.outputs.digest }}"              # e.g. sha256:abc...
-          echo "$d" > "${{ runner.temp }}/digests/${d#sha256:}"           # file named by the hash only
+          echo "$d" > "${{ runner.temp }}/digests/${{ matrix.php_version }}-${d#sha256:}"           # file named by the hash only
 
       - name: Upload digest artifact
         if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
