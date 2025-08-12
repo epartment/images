@@ -233,7 +233,7 @@ jobs:
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
             PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
             XDEBUG_TYPE=${{ matrix.xdebug_type }}
-          tags: ${{ env.REGISTRY_XDEBUG }}
+          tags: ${{ env.REGISTRY_XDEBUG }}:${{ matrix.php_version }}-node${{ matrix.node_version }}
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-debug:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-debug:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
