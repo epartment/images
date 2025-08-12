@@ -171,6 +171,7 @@ jobs:
             NODE_VERSION=${{ matrix.node_version }}
             OS_RELEASE=${{ matrix.node_os_release }}
           tags: ${{ env.REGISTRY_IMAGE }}-node${{ matrix.node_version }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
         if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
@@ -233,6 +234,7 @@ jobs:
             PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
             XDEBUG_TYPE=${{ matrix.xdebug_type }}
           tags: ghcr.io/${{ github.repository_owner }}/roll/php-fpm-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-debug:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-debug:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
 
