@@ -102,7 +102,7 @@ jobs:
             OS_RELEASE=${{ matrix.php_os_release }}
             ENV_SOURCE_IMAGE=php
           # content-addressable push; creates steps.build.outputs.digest
-          outputs: type=image,name=${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }},push-by-digest=true
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}-buildcache,mode=max
 
