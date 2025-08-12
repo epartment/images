@@ -13,6 +13,9 @@ on:
     branches:
       - master
 
+env:
+  REGISTRY_IMAGE: ghcr.io/epartment/roll/php-fpm
+
 jobs:
   php-matrix:
     name: Generate Base PHP Matrix
@@ -57,19 +60,21 @@ jobs:
           php .github/workflows/php-matrix/full-generator.php >> $GITHUB_OUTPUT
       - run: echo "Matrix:\n";echo '${{ steps.matrix.outputs.matrix }}'
 
-  php-fpm:
+  php-fpm-build:
     needs: php-matrix
-    name: Build ${{ matrix.php_version }} on ${{ matrix.platform }}
-    runs-on: ${{ matrix.platform == 'linux/amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
+    name: PHP-FPM ${{ matrix.php_version }} (${{ matrix.arch.cache_arch }})
+    runs-on: ${{ matrix.arch.runs_on }}
+    permissions:
+      contents: read
+      packages: write
     continue-on-error: ${{ matrix.continue_on_error || false }}
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.php-matrix.outputs.matrix)}}
+      matrix: ${{ fromJson(needs.php-matrix.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
             image=moby/buildkit:v0.10.6
@@ -89,42 +94,41 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # Push the platform-specific image by digest (no tag yet).
-      - id: build
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+      - name: Build and push by digest (${{ matrix.arch.cache_arch }})
+        id: build
         uses: docker/build-push-action@v6
         with:
           file: php-fpm/Dockerfile
           context: php-fpm/context
-          platforms: ${{ matrix.platform }}
+          platforms: ${{ matrix.arch.docker_platform }}
           build-args: |
             PHP_VERSION=${{ matrix.php_version }}
             OS_RELEASE=${{ matrix.php_os_release }}
             ENV_SOURCE_IMAGE=php
-          # content-addressable push; creates steps.build.outputs.digest
+          tags: ${{ env.REGISTRY_IMAGE }}
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}-buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}-buildcache,mode=max
-
-      - name: Export digest file
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-buildcache,mode=max
         if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        shell: bash
+
+      - name: Export digest
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
         run: |
           mkdir -p ${{ runner.temp }}/digests
-          digest="${{ steps.build.outputs.digest }}"              # e.g. sha256:abc...
-          touch "${{ runner.temp }}/digests/${{ matrix.php_version }}-${digest#sha256:}"           # file named by the hash only
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${{ matrix.php_version }}-${digest#sha256:}"
 
-      - name: Upload digest artifact
+      - name: Upload digest
         if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}-${{ matrix.php_version }}
+          name: digests-${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
 
   merge:
-    needs: php-fpm
+    needs: php-fpm-build
     if: ${{ github.ref == 'refs/heads/master' }}
     runs-on: ubuntu-latest
     permissions:
@@ -161,7 +165,7 @@ jobs:
         working-directory: ${{ runner.temp }}/digests
         run: |
           set -euo pipefail
-          REGISTRY_IMAGE="ghcr.io/${{ github.repository_owner }}/roll/php-fpm"
+          REGISTRY_IMAGE="${{ env.REGISTRY_IMAGE }}"
           version_names=$(ls | cut -d- -f1 | sort -u)
           # no latest tag creation; only per-version manifests
           for version in $version_names; do
