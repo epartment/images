@@ -244,7 +244,7 @@ jobs:
         run: |
           mkdir -p ${{ runner.temp }}/xdebug-digests
           digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/digests/${digest#sha256:}-${{ matrix.php_version }}-node${{ matrix.node_version }}"
+          touch "${{ runner.temp }}/xdebug-digests/${digest#sha256:}-${{ matrix.php_version }}-node${{ matrix.node_version }}"
 
       - name: Upload digest
         if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
