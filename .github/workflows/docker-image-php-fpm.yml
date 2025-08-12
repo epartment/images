@@ -130,9 +130,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    strategy:
-      fail-fast: false
-      matrix: ${{fromJson(needs.php-matrix.outputs.matrix)}}
 
     steps:
       - name: Download digests
