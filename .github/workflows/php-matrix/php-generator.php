@@ -12,6 +12,7 @@ foreach (PHP_VERSIONS as $phpVersion) {
         'php_os_release' => $phpOsRelease,
         'experimental' => $experimental,
         'latest' => $phpVersion === PHP_LATEST,
+        'platform' => [ 'linux/amd64', 'linux/arm64' ],
     ];
 }
 
