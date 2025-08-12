@@ -126,6 +126,9 @@ jobs:
   merge:
     needs: php-fpm
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.php-matrix.outputs.matrix)}}
     permissions:
       contents: read
       packages: write
