@@ -110,28 +110,29 @@ jobs:
         if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
         shell: bash
         run: |
-          mkdir -p /tmp/digests
+          mkdir -p ${{ runner.temp }}/digests
           d="${{ steps.build.outputs.digest }}"              # e.g. sha256:abc...
-          echo "$d" > "/tmp/digests/${d#sha256:}"           # file named by the hash only
+          echo "$d" > "${{ runner.temp }}/digests/${d#sha256:}"           # file named by the hash only
 
       - name: Upload digest artifact
         if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
         uses: actions/upload-artifact@v4
         with:
           name: digests-${{ matrix.php_version }}-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
-          path: /tmp/digests/*
+          path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
 
   merge:
     needs: [ php-fpm, php-matrix ]
+    if: ${{ github.ref == 'refs/heads/master' }}
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix: ${{fromJson(needs.php-matrix.outputs.matrix)}}
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.php-matrix.outputs.matrix)}}
 
     steps:
       - name: Prepare
@@ -140,7 +141,7 @@ jobs:
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
-          path: /tmp/digests
+          path: ${{ runner.temp }}/digests
           pattern: digests-*
           merge-multiple: true
 
@@ -162,10 +163,25 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Create and push manifest
-        working-directory: /tmp/digests
-        run: docker buildx imagetools create -t ${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }} $(printf 'ghcr.io/${{ github.repository_owner }}/roll/php-fpm@sha256:%s ' *)
+      - name: Create and push manifests per PHP version
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          set -euo pipefail
+          REGISTRY_IMAGE="ghcr.io/${{ github.repository_owner }}/roll/php-fpm"
+          version_names=$(ls | cut -d- -f1 | sort -u)
+          # no latest tag creation; only per-version manifests
+          for version in $version_names; do
+            references=""
+            for file in ${version}-*; do
+              digest_sha256=${file#${version}-}
+              references="$references $REGISTRY_IMAGE@sha256:${digest_sha256}"
+            done
+            tag_arguments="-t $REGISTRY_IMAGE:${version}"
 
+            echo "Creating manifest for ${version} with references:${references} and tag arguments:${tag_arguments}"
+            # shellcheck disable=SC2086
+            docker buildx imagetools create ${tag_arguments} ${references}
+          done
 #  php-node:
 #    name: PHP-FPM ${{ matrix.php_version }} + Node ${{ matrix.node_version }}
 #    runs-on: ubuntu-latest
