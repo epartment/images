@@ -1,10 +1,27 @@
 <?php
 
-const PLATFORMS = ['linux/amd64', 'linux/arm64'];
+const ARCHES = [
+    [
+        'name' => 'x86',
+        'runs_on' => 'ubuntu-24.04',
+        'docker_platform' => 'linux/amd64',
+        'platform_pair' => 'linux-amd64',
+        'cache_suffix' => 'x86',
+        'cache_arch' => 'amd64'
+    ],
+    [
+        'name' => 'arm64',
+        'runs_on' => 'ubuntu-24.04-arm',
+        'docker_platform' => 'linux/arm64',
+        'platform_pair' => 'linux-arm64',
+        'cache_suffix' => 'arm64',
+        'cache_arch' => 'arm64'
+    ],
+];
 
 const PHP_LATEST = '8.4';
 const PHP_VERSIONS = ['7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4'];
-CONST PHP_VERSIONS_OS_RELEASE = [
+const PHP_VERSIONS_OS_RELEASE = [
     '7.3' => 'bullseye',
     '7.4' => 'bullseye',
     '8.0' => 'bullseye',
