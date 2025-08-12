@@ -16,7 +16,7 @@ foreach (PHP_VERSIONS as $phpVersion) {
                 'node_version' => $nodeVersion,
                 'node_os_release' => $nodeOsRelease,
                 'experimental' => $experimental,
-                'latest' => $phpVersion === PHP_LATEST && $nodeVersion === NODE_LATEST,
+                'arch' => $arch,
             ];
         }
     }
