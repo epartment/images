@@ -87,7 +87,9 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
         if: ${{ !env.ACT }}
 
-      - uses: docker/build-push-action@v6
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
         with:
           file: php-fpm/Dockerfile
           context: php-fpm/context
@@ -100,6 +102,7 @@ jobs:
           tags: ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-buildcache,mode=max
+          outputs: type=image,name=${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-buildcache,push-by-digest=true,name-canonical=true,push=true
 
       - uses: docker/build-push-action@v6
         if: ${{ matrix.latest }}
