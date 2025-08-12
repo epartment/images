@@ -18,6 +18,8 @@ env:
   REGISTRY_XDEBUG: ghcr.io/epartment/roll/php-fpm-debug
   REGISTRY_MAGENTO1: ghcr.io/epartment/roll/php-fpm-magento1
   REGISTRY_MAGENTO2: ghcr.io/epartment/roll/php-fpm-magento2
+  REGISTRY_MAGENTO2_DEBUG: ghcr.io/epartment/roll/php-fpm-magento2-debug
+  REGISTRY_WORDPRESS: ghcr.io/epartment/roll/php-fpm-wordpress
 
 jobs:
   php-matrix:
@@ -392,184 +394,139 @@ jobs:
           path: ${{ runner.temp }}/magento2-digests/*
           if-no-files-found: error
           retention-days: 1
-#
-#  magento2-xdebug:
-#    name: Magento 2 PHP-FPM ${{ matrix.php_version }} + XDebug - Node ${{ matrix.node_version }}
-#    runs-on: ubuntu-latest
-#    needs: [ full-matrix, magento2 ]
-#    continue-on-error: ${{ matrix.continue_on_error || false }}
-#    strategy:
-#      fail-fast: false
-#      max-parallel: ${{ github.ref == 'refs/heads/master' && 2 || 0 }}
-#      matrix: ${{fromJson(needs.full-matrix.outputs.matrix)}}
-#    steps:
-#      - uses: actions/checkout@v4
-#      - uses: docker/setup-qemu-action@v3
-#      - uses: docker/setup-buildx-action@v3
-#        with:
-#          driver-opts: |
-#            image=moby/buildkit:v0.10.6
-#      - name: Login to Github Container Registry
-#        uses: docker/login-action@v3
-#        with:
-#          registry: ghcr.io
-#          username: ${{ github.repository_owner }}
-#          password: ${{ secrets.GITHUB_TOKEN }}
-#        if: ${{ !env.ACT }}
-#
-#      - name: Login to Docker Hub
-#        uses: docker/login-action@v3
-#        with:
-#          username: ${{ secrets.DOCKER_USERNAME }}
-#          password: ${{ secrets.DOCKER_PASSWORD }}
-#        if: ${{ !env.ACT }}
-#
-#      - uses: docker/build-push-action@v6
-#        if: ${{ matrix.node_version!='x' }}
-#        with:
-#          file: php-fpm/magento2/xdebug3/Dockerfile
-#          context: php-fpm/context
-#          platforms: linux/amd64,linux/arm64
-#          build-args: |
-#            ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2
-#            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
-#            XDEBUG_TYPE=${{ matrix.xdebug_type }}
-#          push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-#          tags: ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}
-#          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
-#          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
-#
-#      - uses: docker/build-push-action@v6
-#        if: ${{ matrix.node_version=='x' }}
-#        with:
-#          file: php-fpm/magento2/xdebug3/Dockerfile
-#          context: php-fpm/context
-#          platforms: linux/amd64,linux/arm64
-#          build-args: |
-#            ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2
-#            PHP_VERSION=${{ matrix.php_version }}
-#            XDEBUG_TYPE=${{ matrix.xdebug_type }}
-#          push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-#          tags: ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:${{ matrix.php_version }}
-#          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
-#          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
-#
-#      - uses: docker/build-push-action@v6
-#        if: ${{ matrix.node_version!='x' && matrix.latest }}
-#        with:
-#          file: php-fpm/magento2/xdebug3/Dockerfile
-#          context: php-fpm/context
-#          platforms: linux/amd64,linux/arm64
-#          build-args: |
-#            ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2
-#            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
-#            XDEBUG_TYPE=${{ matrix.xdebug_type }}
-#          push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-#          tags: ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:latest-nodelatest
-#          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
-#          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
-#
-#      - uses: docker/build-push-action@v6
-#        if: ${{ matrix.node_version=='x' && matrix.latest }}
-#        with:
-#          file: php-fpm/magento2/xdebug3/Dockerfile
-#          context: php-fpm/context
-#          platforms: linux/amd64,linux/arm64
-#          build-args: |
-#            ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2
-#            PHP_VERSION=${{ matrix.php_version }}
-#            XDEBUG_TYPE=${{ matrix.xdebug_type }}
-#          push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-#          tags: ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:latest
-#          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
-#          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
-#
-#  wordpress:
-#    name: Wordpress PHP-FPM ${{ matrix.php_version }} - Node ${{ matrix.node_version }}
-#    runs-on: ubuntu-latest
-#    needs: [ full-matrix, php-node ]
-#    continue-on-error: ${{ matrix.continue_on_error || false }}
-#    strategy:
-#      fail-fast: false
-#      max-parallel: ${{ github.ref == 'refs/heads/master' && 2 || 0 }}
-#      matrix: ${{fromJson(needs.full-matrix.outputs.matrix)}}
-#    steps:
-#      - uses: actions/checkout@v4
-#      - uses: docker/setup-qemu-action@v3
-#      - uses: docker/setup-buildx-action@v3
-#        with:
-#          driver-opts: |
-#            image=moby/buildkit:v0.10.6
-#      - name: Login to Github Container Registry
-#        uses: docker/login-action@v3
-#        with:
-#          registry: ghcr.io
-#          username: ${{ github.repository_owner }}
-#          password: ${{ secrets.GITHUB_TOKEN }}
-#        if: ${{ !env.ACT }}
-#
-#      - name: Login to Docker Hub
-#        uses: docker/login-action@v3
-#        with:
-#          username: ${{ secrets.DOCKER_USERNAME }}
-#          password: ${{ secrets.DOCKER_PASSWORD }}
-#        if: ${{ !env.ACT }}
-#
-#      - uses: docker/build-push-action@v6
-#        if: ${{ matrix.node_version!='x' }}
-#        with:
-#          file: php-fpm/wordpress/Dockerfile
-#          context: php-fpm/context
-#          platforms: linux/amd64,linux/arm64
-#          build-args: |
-#            ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
-#            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
-#          push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-#          tags: ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:${{ matrix.php_version }}-node${{ matrix.node_version }}
-#          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
-#          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
-#
-#      - uses: docker/build-push-action@v6
-#        if: ${{ matrix.node_version=='x' }}
-#        with:
-#          file: php-fpm/wordpress/Dockerfile
-#          context: php-fpm/context
-#          platforms: linux/amd64,linux/arm64
-#          build-args: |
-#            ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
-#            PHP_VERSION=${{ matrix.php_version }}
-#          push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-#          tags: ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:${{ matrix.php_version }}
-#          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
-#          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
-#
-#      - uses: docker/build-push-action@v6
-#        if: ${{ matrix.node_version!='x' && matrix.latest }}
-#        with:
-#          file: php-fpm/wordpress/Dockerfile
-#          context: php-fpm/context
-#          platforms: linux/amd64,linux/arm64
-#          build-args: |
-#            ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
-#            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
-#          push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-#          tags: ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:latest-nodelatest
-#          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
-#          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
-#
-#      - uses: docker/build-push-action@v6
-#        if: ${{ matrix.node_version=='x' && matrix.latest }}
-#        with:
-#          file: php-fpm/wordpress/Dockerfile
-#          context: php-fpm/context
-#          platforms: linux/amd64,linux/arm64
-#          build-args: |
-#            ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
-#            PHP_VERSION=${{ matrix.php_version }}
-#          push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-#          tags: ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:latest
-#          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache
-#          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:${{ matrix.php_version }}-node${{ matrix.node_version }}-buildcache,mode=max
+
+  magento2-xdebug:
+    needs: [ full-matrix, magento2 ]
+    name: Magento 2 PHP-FPM ${{ matrix.php_version }} + XDebug - Node ${{ matrix.node_version }}
+    runs-on: ${{ matrix.arch.runs_on }}
+    permissions:
+      contents: read
+      packages: write
+    continue-on-error: ${{ matrix.continue_on_error || false }}
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ github.ref == 'refs/heads/master' && 2 || 0 }}
+      matrix: ${{fromJson(needs.full-matrix.outputs.matrix)}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:v0.10.6
+      - name: Login to GHCR
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push by digest (${{ matrix.arch.cache_arch }})
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          file: php-fpm/magento2/xdebug3/Dockerfile
+          context: php-fpm/context
+          platforms: ${{ matrix.arch.docker_platform }}
+          build-args: |
+            ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2
+            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
+            XDEBUG_TYPE=${{ matrix.xdebug_type }}
+          tags: ${{ env.REGISTRY_MAGENTO2_DEBUG }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+
+      - name: Export digest
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        run: |
+          mkdir -p ${{ runner.temp }}/magento2-debug-digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/magento2-debug-digests/${digest#sha256:}-${{ matrix.php_version }}-node${{ matrix.node_version }}"
+
+      - name: Upload digest
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: magento2-debug-digests-${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}
+          path: ${{ runner.temp }}/magento2-debug-digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  wordpress:
+    needs: [ full-matrix, php-node ]
+    name: Wordpress PHP-FPM ${{ matrix.php_version }} - Node ${{ matrix.node_version }}
+    runs-on: ${{ matrix.arch.runs_on }}
+    permissions:
+      contents: read
+      packages: write
+    continue-on-error: ${{ matrix.continue_on_error || false }}
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ github.ref == 'refs/heads/master' && 2 || 0 }}
+      matrix: ${{fromJson(needs.full-matrix.outputs.matrix)}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:v0.10.6
+      - name: Login to GHCR
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push by digest (${{ matrix.arch.cache_arch }})
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          file: php-fpm/wordpress/Dockerfile
+          context: php-fpm/context
+          platforms: ${{ matrix.arch.docker_platform }}
+          build-args: |
+            ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
+            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
+          tags: ${{ env.REGISTRY_WORDPRESS }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+
+      - name: Export digest
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        run: |
+          mkdir -p ${{ runner.temp }}/wordpress-digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/wordpress-digests/${digest#sha256:}-${{ matrix.php_version }}-node${{ matrix.node_version }}"
+
+      - name: Upload digest
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: wordpress-digests-${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}
+          path: ${{ runner.temp }}/wordpress-digests/*
+          if-no-files-found: error
+          retention-days: 1
 
   merge:
     needs: [ php-fpm-build, php-node ]
@@ -745,7 +702,7 @@ jobs:
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
-          path: ${{ runner.temp }}/magento1-digests
+          path: ${{ runner.temp }}/magento2-digests
           pattern: magento2-digests-*
           merge-multiple: true
 
@@ -772,6 +729,114 @@ jobs:
         run: |
           set -euo pipefail
           REGISTRY_IMAGE="${{ env.REGISTRY_MAGENTO2 }}"
+          version_names=$(ls | cut -d- -f 2- | sort -u)
+          # no latest tag creation; only per-version manifests
+          for version in $version_names; do
+            references=""
+            for file in *-"${version}"; do
+              digest_sha256=${file%-${version}}
+              references="$references $REGISTRY_IMAGE@sha256:${digest_sha256}"
+            done
+            tag_arguments="-t $REGISTRY_IMAGE:${version}"
+
+            echo "Creating manifest for ${version} with references:${references} and tag arguments:${tag_arguments}"
+            # shellcheck disable=SC2086
+            docker buildx imagetools create ${tag_arguments} ${references}
+          done
+
+  merge-magento2-xdebug:
+    needs: [ magento2-xdebug ]
+    if: ${{ github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/magento2-debug-digests
+          pattern: magento2-debug-digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Create and push manifests per PHP version
+        working-directory: ${{ runner.temp }}/magento2-debug-digests
+        run: |
+          set -euo pipefail
+          REGISTRY_IMAGE="${{ env.REGISTRY_MAGENTO2_DEBUG }}"
+          version_names=$(ls | cut -d- -f 2- | sort -u)
+          # no latest tag creation; only per-version manifests
+          for version in $version_names; do
+            references=""
+            for file in *-"${version}"; do
+              digest_sha256=${file%-${version}}
+              references="$references $REGISTRY_IMAGE@sha256:${digest_sha256}"
+            done
+            tag_arguments="-t $REGISTRY_IMAGE:${version}"
+
+            echo "Creating manifest for ${version} with references:${references} and tag arguments:${tag_arguments}"
+            # shellcheck disable=SC2086
+            docker buildx imagetools create ${tag_arguments} ${references}
+          done
+
+  merge-wordpress:
+    needs: [ wordpress ]
+    if: ${{ github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/wordpress-digests
+          pattern: wordpress-digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Create and push manifests per PHP version
+        working-directory: ${{ runner.temp }}/wordpress-digests
+        run: |
+          set -euo pipefail
+          REGISTRY_IMAGE="${{ env.REGISTRY_WORDPRESS }}"
           version_names=$(ls | cut -d- -f 2- | sort -u)
           # no latest tag creation; only per-version manifests
           for version in $version_names; do
