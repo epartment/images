@@ -10,10 +10,9 @@ RUN mv /opt/yarn* /opt/yarn
 FROM ${ENV_SOURCE_IMAGE}:${PHP_VERSION}
 USER root
 
-# Install ARM libraries and libc-bin for ldd command
-RUN dpkg --add-architecture arm64 \
-    && apt-get update \
-    && apt-get install -y libc6:arm64 libstdc++6:arm64 libc-bin
+# Install libraries and libc-bin for ldd command
+RUN apt-get update \
+    && apt-get install -y libc6 libstdc++6 libc-bin
 
 # Copy Node to PHP
 COPY --from=node /usr/local/include/node /usr/local/include/node
