@@ -3,7 +3,10 @@ FROM mariadb:${MARIADB_VERSION}
 # Create symlink from /usr/sbin/mysqld → /usr/sbin/mariadbd if it doesn't already exist
 RUN if [ ! -e /usr/sbin/mysqld ]; then \
       ln -s /usr/sbin/mariadbd /usr/sbin/mysqld; \
-      ln -s /usr/sbin/mariadb /usr/sbin/mysql; \
+    fi
+
+RUN if [ ! -e /usr/bin/mysql ]; then \
+      ln -s /usr/bin/mariadb /usr/bin/mysql; \
     fi
 
 # Add mydumper repo + key and install mydumper
