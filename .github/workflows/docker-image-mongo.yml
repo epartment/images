@@ -1,6 +1,14 @@
-name: Docker Image MangoDB
+name: Docker Image MongoDB
 on:
   workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild all images (ignore digest check)'
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: '0 6 * * 0'
   push:
     paths:
       - .trigger
@@ -8,19 +16,87 @@ on:
       - .github/workflows/*mongo*
 
 jobs:
-  mongo:
-    name: MongoDB
+  discover-versions:
+    name: Discover MongoDB Versions
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.discover.outputs.matrix }}
+      build_needed: ${{ steps.discover.outputs.build_needed }}
+    steps:
+      - name: Setup crane
+        uses: imjasonh/setup-crane@v0.5
 
+      - name: Login to GHCR (for digest check)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ !env.ACT }}
+
+      - name: Discover MongoDB versions
+        id: discover
+        run: |
+          FORCE_REBUILD="${{ inputs.force_rebuild }}"
+          GHCR_BASE="ghcr.io/${{ github.repository_owner }}/mongo"
+
+          # MongoDB uses bare major tags (5, 6, 7, 8) on Docker Hub >= 5
+          VERSIONS=$(crane ls mongo 2>/dev/null \
+            | grep -E '^[0-9]+$' \
+            | awk '$1 >= 5' \
+            | sort -V)
+
+          echo "Discovered MongoDB versions: $VERSIONS"
+
+          MATRIX='{"include":['
+          FIRST=true
+          for VERSION in $VERSIONS; do
+            NEEDS_BUILD=false
+            if [ "$FORCE_REBUILD" = "true" ]; then
+              NEEDS_BUILD=true
+              echo "🔄 MongoDB ${VERSION}: Force rebuild"
+            else
+              UPSTREAM_DIGEST=$(crane digest "mongo:${VERSION}" 2>/dev/null || echo "")
+              GHCR_DIGEST=$(crane digest "${GHCR_BASE}:${VERSION}" 2>/dev/null || echo "")
+
+              if [ -z "$GHCR_DIGEST" ]; then
+                NEEDS_BUILD=true
+                echo "🆕 MongoDB ${VERSION}: Not yet on GHCR"
+              elif [ -z "$UPSTREAM_DIGEST" ]; then
+                echo "⚠️  MongoDB ${VERSION}: Could not get upstream digest, skipping"
+                continue
+              elif [ "$UPSTREAM_DIGEST" != "$GHCR_DIGEST" ]; then
+                NEEDS_BUILD=true
+                echo "🔄 MongoDB ${VERSION}: Digest changed"
+              else
+                echo "✅ MongoDB ${VERSION}: Up to date"
+              fi
+            fi
+
+            if [ "$NEEDS_BUILD" = "true" ]; then
+              [ "$FIRST" = true ] && FIRST=false || MATRIX+=','
+              MATRIX+="{\"version\":\"${VERSION}\"}"
+            fi
+          done
+          MATRIX+=']}'
+
+          echo "Matrix: $MATRIX"
+
+          if [ "$MATRIX" = '{"include":[]}' ]; then
+            echo "build_needed=false" >> $GITHUB_OUTPUT
+          else
+            echo "build_needed=true" >> $GITHUB_OUTPUT
+          fi
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+  mongo:
+    name: MongoDB ${{ matrix.version }}
+    needs: discover-versions
+    if: needs.discover-versions.outputs.build_needed == 'true'
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        version:
-          - "5"
-          - "6"
-          - "7"
-          - "8"
-
+      matrix: ${{ fromJson(needs.discover-versions.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-qemu-action@v3
@@ -45,7 +121,7 @@ jobs:
         with:
           context: mongo
           platforms: linux/amd64,linux/arm64
-          build-args: MONGO_VERSION=${{ matrix.version }}${{ matrix.modifier }}
+          build-args: MONGO_VERSION=${{ matrix.version }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/mongo:${{ matrix.version }}${{ matrix.modifier }}
+          tags: ghcr.io/${{ github.repository_owner }}/mongo:${{ matrix.version }}
         if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}

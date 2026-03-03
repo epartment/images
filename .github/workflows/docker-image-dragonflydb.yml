@@ -1,35 +1,121 @@
 name: Docker Image DragonflyDB
 on:
   workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild all images (ignore digest check)'
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: '0 10 * * 0'
   push:
     paths:
       - .trigger
       - dragonfly/**
       - .github/workflows/*dragonfly*
 
-
 jobs:
-  dragonfly:
-    name: DragonflyDB
+  discover-versions:
+    name: Discover DragonflyDB Versions
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.discover.outputs.matrix }}
+      build_needed: ${{ steps.discover.outputs.build_needed }}
+    steps:
+      - name: Setup crane
+        uses: imjasonh/setup-crane@v0.5
 
+      - name: Login to GHCR (for digest check)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ !env.ACT }}
+
+      - name: Discover DragonflyDB versions
+        id: discover
+        run: |
+          FORCE_REBUILD="${{ inputs.force_rebuild }}"
+          GHCR_BASE="ghcr.io/${{ github.repository_owner }}/dragonfly"
+          DF_REGISTRY="docker.dragonflydb.io/dragonflydb/dragonfly"
+
+          # Get all clean release tags (v-prefixed major.minor.patch)
+          ALL_TAGS=$(crane ls "$DF_REGISTRY" 2>/dev/null \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$')
+
+          # Extract unique major.minor versions >= 1.15 (strip v prefix and patch)
+          VERSIONS=$(echo "$ALL_TAGS" \
+            | sed 's/^v//; s/\.[0-9]*$//' \
+            | sort -uV \
+            | awk -F'.' '$1 > 1 || ($1 == 1 && $2 >= 15)')
+
+          echo "Discovered DragonflyDB versions: $VERSIONS"
+
+          MATRIX='{"include":['
+          FIRST=true
+          for VERSION in $VERSIONS; do
+            ESCAPED_VERSION=$(echo "$VERSION" | sed 's/\./\\./g')
+
+            # Resolve latest patch (tags are v-prefixed)
+            FULL_VERSION=$(echo "$ALL_TAGS" \
+              | grep -E "^v${ESCAPED_VERSION}\.[0-9]+$" \
+              | sort -Vr | head -n1)
+
+            if [ -z "$FULL_VERSION" ]; then
+              echo "⚠️  DragonflyDB ${VERSION}: No matching tag found, skipping"
+              continue
+            fi
+
+            echo "DragonflyDB ${VERSION} -> ${FULL_VERSION}"
+
+            NEEDS_BUILD=false
+            if [ "$FORCE_REBUILD" = "true" ]; then
+              NEEDS_BUILD=true
+              echo "  🔄 Force rebuild"
+            else
+              UPSTREAM_DIGEST=$(crane digest "${DF_REGISTRY}:${FULL_VERSION}" 2>/dev/null || echo "")
+              GHCR_DIGEST=$(crane digest "${GHCR_BASE}:${VERSION}" 2>/dev/null || echo "")
+
+              if [ -z "$GHCR_DIGEST" ]; then
+                NEEDS_BUILD=true
+                echo "  🆕 Not yet on GHCR"
+              elif [ -z "$UPSTREAM_DIGEST" ]; then
+                echo "  ⚠️  Could not get upstream digest, skipping"
+                continue
+              elif [ "$UPSTREAM_DIGEST" != "$GHCR_DIGEST" ]; then
+                NEEDS_BUILD=true
+                echo "  🔄 Digest changed"
+              else
+                echo "  ✅ Up to date"
+              fi
+            fi
+
+            if [ "$NEEDS_BUILD" = "true" ]; then
+              [ "$FIRST" = true ] && FIRST=false || MATRIX+=','
+              MATRIX+="{\"version\":\"${VERSION}\",\"full_version\":\"${FULL_VERSION}\"}"
+            fi
+          done
+          MATRIX+=']}'
+
+          echo "Matrix: $MATRIX"
+
+          if [ "$MATRIX" = '{"include":[]}' ]; then
+            echo "build_needed=false" >> $GITHUB_OUTPUT
+          else
+            echo "build_needed=true" >> $GITHUB_OUTPUT
+          fi
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+  dragonfly:
+    name: DragonflyDB ${{ matrix.version }}
+    needs: discover-versions
+    if: needs.discover-versions.outputs.build_needed == 'true'
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        version:
-          - "1.15"
-          - "1.16"
-          - "1.17"
-          - "1.18"
-          - "1.19"
-          - "1.20"
-          - "1.21"
-          - "1.23"
-          - "1.24"
-          - "1.25"
-          - "1.26"
-          - "1.27"
-
+      matrix: ${{ fromJson(needs.discover-versions.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-qemu-action@v3
@@ -50,20 +136,11 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
         if: ${{ !env.ACT }}
 
-      - name: Set build-args
-        run: |-
-          ESCAPED_VERSION="$(echo ${{ matrix.version }} | sed 's/\./\\\./g')"
-          DRAGONFLY_VERSION=$(
-            docker run --rm gcr.io/go-containerregistry/crane:v0.20.3 ls docker.dragonflydb.io/dragonflydb/dragonfly \
-            | egrep "^v${ESCAPED_VERSION}\.[0-9]+(\.[0-9]+)?\$" | sort -Vr | head -n1
-          )
-          echo "DRAGONFLY_VERSION=${DRAGONFLY_VERSION}" | tee /dev/stderr >> $GITHUB_ENV
-
       - uses: docker/build-push-action@v6
         with:
           context: dragonfly
           platforms: linux/amd64,linux/arm64
-          build-args: DRAGONFLY_VERSION=${{ env.DRAGONFLY_VERSION }}
+          build-args: DRAGONFLY_VERSION=${{ matrix.full_version }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
           tags: ghcr.io/${{ github.repository_owner }}/dragonfly:${{ matrix.version }}
         if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}
