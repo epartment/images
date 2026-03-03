@@ -1,6 +1,14 @@
 name: Docker Image MariaDB
 on:
   workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild all images (ignore digest check)'
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: '0 3 * * 0'
   push:
     paths:
       - .trigger
@@ -8,24 +16,153 @@ on:
       - .github/workflows/*mariadb*
 
 jobs:
-  mariadb:
-    name: MariaDB
+  discover-versions:
+    name: Discover MariaDB Versions
     runs-on: ubuntu-latest
+    outputs:
+      stable_matrix: ${{ steps.discover.outputs.stable_matrix }}
+      rc_matrix: ${{ steps.discover.outputs.rc_matrix }}
+      build_stable: ${{ steps.discover.outputs.build_stable }}
+      build_rc: ${{ steps.discover.outputs.build_rc }}
+    steps:
+      - name: Setup crane
+        uses: imjasonh/setup-crane@v0.4
 
+      - name: Login to GHCR (for digest check)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ !env.ACT }}
+
+      - name: Discover MariaDB versions
+        id: discover
+        run: |
+          FORCE_REBUILD="${{ inputs.force_rebuild }}"
+          GHCR_BASE="ghcr.io/${{ github.repository_owner }}/mariadb"
+
+          ALL_TAGS=$(crane ls mariadb 2>/dev/null || echo "")
+
+          # Discover stable versions (bare major.minor >= 10.6)
+          STABLE_VERSIONS=$(echo "$ALL_TAGS" \
+            | grep -E '^[0-9]+\.[0-9]+$' \
+            | awk -F'.' '$1 > 10 || ($1 == 10 && $2 >= 6)' \
+            | sort -V)
+
+          # Discover RC versions (major.minor-rc)
+          RC_VERSIONS=$(echo "$ALL_TAGS" \
+            | grep -E '^[0-9]+\.[0-9]+-rc$' \
+            | awk -F'.' '{split($2,a,"-"); if ($1 > 10 || ($1 == 10 && a[1] >= 6)) print}' \
+            | sort -V)
+
+          # Exclude RC versions whose stable counterpart exists
+          FILTERED_RC=""
+          for RC in $RC_VERSIONS; do
+            STABLE_VER=$(echo "$RC" | sed 's/-rc$//')
+            if ! echo "$STABLE_VERSIONS" | grep -q "^${STABLE_VER}$"; then
+              FILTERED_RC="${FILTERED_RC:+$FILTERED_RC
+          }$RC"
+            else
+              echo "Skipping $RC (stable $STABLE_VER exists)"
+            fi
+          done
+
+          echo "Stable versions: $STABLE_VERSIONS"
+          echo "RC versions (after filter): $FILTERED_RC"
+
+          # Build stable matrix with digest check
+          STABLE_MATRIX='{"include":['
+          FIRST=true
+          for VERSION in $STABLE_VERSIONS; do
+            NEEDS_BUILD=false
+            if [ "$FORCE_REBUILD" = "true" ]; then
+              NEEDS_BUILD=true
+              echo "🔄 MariaDB ${VERSION}: Force rebuild"
+            else
+              UPSTREAM_DIGEST=$(crane digest "mariadb:${VERSION}" 2>/dev/null || echo "")
+              GHCR_DIGEST=$(crane digest "${GHCR_BASE}:${VERSION}" 2>/dev/null || echo "")
+
+              if [ -z "$GHCR_DIGEST" ]; then
+                NEEDS_BUILD=true
+                echo "🆕 MariaDB ${VERSION}: Not yet on GHCR"
+              elif [ -z "$UPSTREAM_DIGEST" ]; then
+                echo "⚠️  MariaDB ${VERSION}: Could not get upstream digest, skipping"
+                continue
+              elif [ "$UPSTREAM_DIGEST" != "$GHCR_DIGEST" ]; then
+                NEEDS_BUILD=true
+                echo "🔄 MariaDB ${VERSION}: Digest changed"
+              else
+                echo "✅ MariaDB ${VERSION}: Up to date"
+              fi
+            fi
+
+            if [ "$NEEDS_BUILD" = "true" ]; then
+              [ "$FIRST" = true ] && FIRST=false || STABLE_MATRIX+=','
+              STABLE_MATRIX+="{\"version\":\"${VERSION}\"}"
+            fi
+          done
+          STABLE_MATRIX+=']}'
+
+          # Build RC matrix with digest check
+          RC_MATRIX='{"include":['
+          FIRST=true
+          for VERSION in $FILTERED_RC; do
+            NEEDS_BUILD=false
+            if [ "$FORCE_REBUILD" = "true" ]; then
+              NEEDS_BUILD=true
+              echo "🔄 MariaDB ${VERSION}: Force rebuild"
+            else
+              UPSTREAM_DIGEST=$(crane digest "mariadb:${VERSION}" 2>/dev/null || echo "")
+              GHCR_DIGEST=$(crane digest "${GHCR_BASE}:${VERSION}" 2>/dev/null || echo "")
+
+              if [ -z "$GHCR_DIGEST" ]; then
+                NEEDS_BUILD=true
+                echo "🆕 MariaDB ${VERSION}: Not yet on GHCR"
+              elif [ -z "$UPSTREAM_DIGEST" ]; then
+                echo "⚠️  MariaDB ${VERSION}: Could not get upstream digest, skipping"
+                continue
+              elif [ "$UPSTREAM_DIGEST" != "$GHCR_DIGEST" ]; then
+                NEEDS_BUILD=true
+                echo "🔄 MariaDB ${VERSION}: Digest changed"
+              else
+                echo "✅ MariaDB ${VERSION}: Up to date"
+              fi
+            fi
+
+            if [ "$NEEDS_BUILD" = "true" ]; then
+              [ "$FIRST" = true ] && FIRST=false || RC_MATRIX+=','
+              RC_MATRIX+="{\"version\":\"${VERSION}\"}"
+            fi
+          done
+          RC_MATRIX+=']}'
+
+          echo "Stable matrix: $STABLE_MATRIX"
+          echo "RC matrix: $RC_MATRIX"
+
+          if [ "$STABLE_MATRIX" = '{"include":[]}' ]; then
+            echo "build_stable=false" >> $GITHUB_OUTPUT
+          else
+            echo "build_stable=true" >> $GITHUB_OUTPUT
+          fi
+
+          if [ "$RC_MATRIX" = '{"include":[]}' ]; then
+            echo "build_rc=false" >> $GITHUB_OUTPUT
+          else
+            echo "build_rc=true" >> $GITHUB_OUTPUT
+          fi
+
+          echo "stable_matrix=$STABLE_MATRIX" >> $GITHUB_OUTPUT
+          echo "rc_matrix=$RC_MATRIX" >> $GITHUB_OUTPUT
+
+  mariadb:
+    name: MariaDB ${{ matrix.version }}
+    needs: discover-versions
+    if: needs.discover-versions.outputs.build_stable == 'true'
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        version:
-          - "11.3"
-          - "11.4"
-          - "11.5"
-          - "11.6"
-          - "11.7"
-          - "11.8"
-        include:
-          - version: "12.0"
-            modifier: "-rc"
-
+      matrix: ${{ fromJson(needs.discover-versions.outputs.stable_matrix) }}
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-qemu-action@v3
@@ -50,7 +187,45 @@ jobs:
         with:
           context: mariadb
           platforms: linux/amd64,linux/arm64
-          build-args: MARIADB_VERSION=${{ matrix.version }}${{ matrix.modifier }}
+          build-args: MARIADB_VERSION=${{ matrix.version }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/mariadb:${{ matrix.version }}${{ matrix.modifier }}
+          tags: ghcr.io/${{ github.repository_owner }}/mariadb:${{ matrix.version }}
+        if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}
+
+  mariadb-rc:
+    name: MariaDB RC ${{ matrix.version }}
+    needs: discover-versions
+    if: needs.discover-versions.outputs.build_rc == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover-versions.outputs.rc_matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to Github Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ !env.ACT }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+        if: ${{ !env.ACT }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: mariadb
+          platforms: linux/amd64,linux/arm64
+          build-args: MARIADB_VERSION=${{ matrix.version }}
+          push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+          tags: ghcr.io/${{ github.repository_owner }}/mariadb:${{ matrix.version }}
         if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}

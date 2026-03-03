@@ -1,6 +1,14 @@
 name: Docker Image MySQL
 on:
   workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild all images (ignore digest check)'
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: '0 2 * * 0'
   push:
     paths:
       - .trigger
@@ -8,17 +16,114 @@ on:
       - .github/workflows/*mysql*
 
 jobs:
-  mysql8:
-    name: MySQL
+  discover-versions:
+    name: Discover MySQL Versions
     runs-on: ubuntu-latest
+    outputs:
+      modern_matrix: ${{ steps.discover.outputs.modern_matrix }}
+      build_modern: ${{ steps.discover.outputs.build_modern }}
+    steps:
+      - name: Setup crane
+        uses: imjasonh/setup-crane@v0.4
 
+      - name: Login to GHCR (for digest check)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ !env.ACT }}
+
+      - name: Discover MySQL versions
+        id: discover
+        run: |
+          FORCE_REBUILD="${{ inputs.force_rebuild }}"
+          GHCR_BASE="ghcr.io/${{ github.repository_owner }}/mysql"
+
+          # Discover modern versions >= 9.0 from Docker Hub
+          DISCOVERED=$(crane ls mysql 2>/dev/null \
+            | grep -E '^[0-9]+\.[0-9]+$' \
+            | awk -F'.' '$1 >= 9' \
+            | sort -V)
+
+          # Add static 8.0
+          ALL_VERSIONS="8.0"
+          if [ -n "$DISCOVERED" ]; then
+            ALL_VERSIONS="$ALL_VERSIONS
+          $DISCOVERED"
+          fi
+
+          echo "All modern MySQL versions to check:"
+          echo "$ALL_VERSIONS"
+
+          # Resolve full patch version and check digests
+          ALL_TAGS=$(crane ls mysql 2>/dev/null)
+          MATRIX='{"include":['
+          FIRST=true
+          for VERSION in $ALL_VERSIONS; do
+            ESCAPED_VERSION=$(echo "$VERSION" | sed 's/\./\\./g')
+
+            # Resolve latest patch tag (same logic as existing build step)
+            FULL_VERSION=$(echo "$ALL_TAGS" \
+              | grep -E "^${ESCAPED_VERSION}(\.[0-9]+)?(\.[0-9]+)?(-oracle)?$" \
+              | sort -Vr | head -n1)
+
+            if [ -z "$FULL_VERSION" ]; then
+              echo "⚠️  MySQL ${VERSION}: No matching tag found, skipping"
+              continue
+            fi
+
+            echo "MySQL ${VERSION} -> ${FULL_VERSION}"
+
+            # Check if rebuild is needed
+            NEEDS_BUILD=false
+            if [ "$FORCE_REBUILD" = "true" ]; then
+              NEEDS_BUILD=true
+              echo "  🔄 Force rebuild requested"
+            else
+              # Get upstream digest
+              UPSTREAM_DIGEST=$(crane digest "mysql:${FULL_VERSION}" 2>/dev/null || echo "")
+              # Get our GHCR digest
+              GHCR_DIGEST=$(crane digest "${GHCR_BASE}:${VERSION}" 2>/dev/null || echo "")
+
+              if [ -z "$GHCR_DIGEST" ]; then
+                NEEDS_BUILD=true
+                echo "  🆕 Not yet on GHCR"
+              elif [ -z "$UPSTREAM_DIGEST" ]; then
+                echo "  ⚠️  Could not get upstream digest, skipping"
+                continue
+              elif [ "$UPSTREAM_DIGEST" != "$GHCR_DIGEST" ]; then
+                NEEDS_BUILD=true
+                echo "  🔄 Digest changed (upstream: ${UPSTREAM_DIGEST:0:20}... vs ghcr: ${GHCR_DIGEST:0:20}...)"
+              else
+                echo "  ✅ Up to date"
+              fi
+            fi
+
+            if [ "$NEEDS_BUILD" = "true" ]; then
+              [ "$FIRST" = true ] && FIRST=false || MATRIX+=','
+              MATRIX+="{\"version\":\"${VERSION}\",\"full_version\":\"${FULL_VERSION}\"}"
+            fi
+          done
+          MATRIX+=']}'
+
+          echo "Modern matrix: $MATRIX"
+
+          if [ "$MATRIX" = '{"include":[]}' ]; then
+            echo "build_modern=false" >> $GITHUB_OUTPUT
+          else
+            echo "build_modern=true" >> $GITHUB_OUTPUT
+          fi
+          echo "modern_matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+  mysql-modern:
+    name: MySQL ${{ matrix.version }}
+    needs: discover-versions
+    if: needs.discover-versions.outputs.build_modern == 'true'
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        version:
-          - "8.0"
-          - "9.0"
-
+      matrix: ${{ fromJson(needs.discover-versions.outputs.modern_matrix) }}
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-qemu-action@v3
@@ -39,29 +144,18 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
         if: ${{ !env.ACT }}
 
-      - name: Set build-args
-        run: |-
-          ESCAPED_VERSION="$(echo ${{ matrix.version }} | sed 's/\./\\\./g')"
-          MYSQL_VERSION=$(
-            docker run --rm gcr.io/go-containerregistry/crane:v0.20.3 ls mysql \
-            | egrep "^${ESCAPED_VERSION}(\.[0-9]+)?(\.[0-9]+)?(-oracle)?\$" | sort -Vr | head -n1
-          )
-          echo "MYSQL_VERSION=${MYSQL_VERSION}" | tee /dev/stderr >> $GITHUB_ENV
-
-
       - uses: docker/build-push-action@v6
         with:
           context: mysql
           platforms: linux/amd64,linux/arm64
-          build-args: MYSQL_VERSION=${{ env.MYSQL_VERSION }}
+          build-args: MYSQL_VERSION=${{ matrix.full_version }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
           tags: ghcr.io/${{ github.repository_owner }}/mysql:${{ matrix.version }}
         if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}
 
   mysql-legacy:
-    name: MySQL Legacy
+    name: MySQL Legacy ${{ matrix.version }}
     runs-on: ubuntu-latest
-
     strategy:
       fail-fast: false
       matrix:
@@ -69,7 +163,6 @@ jobs:
           - "5.5"
           - "5.6"
           - "5.7"
-
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-qemu-action@v3
