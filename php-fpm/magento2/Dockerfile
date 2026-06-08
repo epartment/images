@@ -68,8 +68,10 @@ RUN chmod +rx /usr/local/bin/n98-magerun2 \
     && ln -s /usr/local/bin/n98-magerun2 /usr/local/bin/mr \
     && ln -s /usr/local/bin/n98-magerun2 /usr/local/bin/n98-magerun2.phar
 
-# Magerun Auto-complete (curl --retry instead of ADD for resilience)
+# Magerun Auto-complete (curl --retry instead of ADD for resilience).
+# Unlike ADD, curl won't create missing parent dirs, so create them first.
 RUN set -eux; \
+    mkdir -p /etc/bash_completion.d /etc/fish/completions /usr/share/zsh/site-functions; \
     curl -fSL --retry 5 --retry-delay 5 --retry-all-errors \
       -o /etc/bash_completion.d/n98-magerun2.phar https://raw.githubusercontent.com/netz98/n98-magerun2/master/res/autocompletion/bash/n98-magerun2.phar.bash; \
     curl -fSL --retry 5 --retry-delay 5 --retry-all-errors \

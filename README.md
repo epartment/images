@@ -37,11 +37,12 @@ owner automatically (the namespace is derived from `github.repository_owner`).
 | `opensearch` | `2.9`–`2.13`, `2.19`, `3.1`–`3.3` + newer (auto) |
 | `rabbitmq` | `3.7`–`3.13`, `4.1` + newer (auto) |
 | `magepack` | `2.3`–`2.11` |
-| `mailhog`, `dnsmasq`, `startpage` | single image (no version matrix) |
+| `mailhog`, `dnsmasq`, `startpage` | `latest` (single image, no version matrix) |
 
-Image tags mirror the upstream version string. No `latest` tag is created for the
-service images. "**+ newer (auto)**" means the workflow **discovers** new upstream
-releases and starts building them on its own — see
+Image tags mirror the upstream version string. The **version-matrix** images do not
+get a `latest` tag; the single-image utilities (`mailhog`, `dnsmasq`, `startpage`)
+are published only as `:latest`. "**+ newer (auto)**" means the workflow
+**discovers** new upstream releases and starts building them on its own — see
 [Adding or changing a version](#adding-or-changing-a-version).
 
 ## How builds work
