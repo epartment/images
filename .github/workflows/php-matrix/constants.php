@@ -108,6 +108,23 @@ function resolve_versions(string $envVar, array $pin, array $deny, string $min):
         ? preg_split('/[\s,]+/', trim($raw), -1, PREG_SPLIT_NO_EMPTY)
         : [];
 
+    // Discovery only ADDS versions newer than the highest pinned one, so
+    // intentionally-skipped older minors are never back-filled (this matches the
+    // documented policy and the simple-service workflows). The pins themselves are
+    // always kept. With no pins, every discovered version above the floor is used.
+    $maxPin = null;
+    foreach ($pin as $p) {
+        if ($maxPin === null || version_compare($p, $maxPin, '>')) {
+            $maxPin = $p;
+        }
+    }
+    if ($maxPin !== null) {
+        $discovered = array_filter(
+            $discovered,
+            static fn($v) => version_compare($v, $maxPin, '>')
+        );
+    }
+
     $versions = array_merge($pin, $discovered);
 
     $versions = array_filter($versions, static function ($v) use ($deny, $min) {

@@ -56,7 +56,7 @@ jobs:
             [ "$(printf '%s\n%s\n' "$MIN" "$v" | sort -V | head -n1)" = "$MIN" ] || continue
             SEL="$SEL $v"
           done
-          SEL=$(printf '%s\n' $SEL | grep -v '^$' | sort -uV)
+          SEL=$(printf '%s\n' $SEL | grep -v '^$' | sort -uV || true)
           echo "Selected Varnish versions: $(echo $SEL | paste -sd' ' -)"
 
           if [ -z "$(echo $SEL | tr -d '[:space:]')" ]; then
