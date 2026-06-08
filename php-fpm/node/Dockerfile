@@ -4,7 +4,12 @@ ARG OS_RELEASE
 ARG NODE_VERSION
 
 FROM node:${NODE_VERSION}-${OS_RELEASE:-bullseye} AS node
-RUN npm install -g grunt-cli gulp
+# Retry the global install so a transient npm registry blip doesn't fail the build.
+RUN set -eux; \
+    n=0; until npm install -g grunt-cli gulp; do \
+      n=$((n + 1)); [ "$n" -ge 5 ] && { echo "npm install failed after $n attempts"; exit 1; }; \
+      echo "npm install failed, retry $n..."; sleep 10; \
+    done
 RUN mv /opt/yarn* /opt/yarn
 
 FROM ${ENV_SOURCE_IMAGE}:${PHP_VERSION}

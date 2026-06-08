@@ -1,6 +1,15 @@
 name: Docker Image PHP-FPM
 on:
   workflow_dispatch:
+    inputs:
+      php_versions:
+        description: 'PHP versions to build (comma-separated). Leave empty to auto-discover from the registry.'
+        required: false
+        type: string
+      node_versions:
+        description: 'Node versions to build (comma-separated). Leave empty to auto-discover from the registry.'
+        required: false
+        type: string
   schedule:
     - cron: "0 6 * * *"   # 6 AM daily
   pull_request:
@@ -22,8 +31,76 @@ env:
   REGISTRY_WORDPRESS: ghcr.io/epartment/roll/php-fpm-wordpress
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Discover which PHP / Node versions to build by listing the upstream tags
+  # with crane, then hand them to the matrix generators. Floor, deny-list and
+  # pinned fallbacks live in php-matrix/constants.php — this job only supplies
+  # the raw discovered lists (the generators apply the policy). If discovery
+  # returns nothing (registry hiccup) the generators fall back to the pinned
+  # lists, so the build never stalls for lack of a version list.
+  # ---------------------------------------------------------------------------
+  discover:
+    name: Discover PHP & Node versions
+    runs-on: ubuntu-latest
+    outputs:
+      php_versions: ${{ steps.discover.outputs.php_versions }}
+      node_versions: ${{ steps.discover.outputs.node_versions }}
+      registry_base: ${{ steps.discover.outputs.registry_base }}
+    steps:
+      - uses: imjasonh/setup-crane@v0.4
+      - name: Login to GHCR
+        if: ${{ !env.ACT }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Discover versions
+        id: discover
+        run: |
+          set -uo pipefail
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          MIRROR="ghcr.io/${OWNER}/base-images"
+
+          # Prefer the GHCR mirror of the base images (insulated from Docker Hub
+          # rate limits); fall back to Docker Hub when the mirror is absent.
+          if crane ls "${MIRROR}/php" >/dev/null 2>&1; then
+            REGISTRY_BASE="${MIRROR}"; PHP_SRC="${MIRROR}/php"; NODE_SRC="${MIRROR}/node"
+            echo "Using mirrored base images: ${MIRROR}"
+          else
+            REGISTRY_BASE=""; PHP_SRC="php"; NODE_SRC="node"
+            echo "Mirror not found; using Docker Hub base images"
+          fi
+          echo "registry_base=${REGISTRY_BASE}" >> "$GITHUB_OUTPUT"
+
+          # Manual override via workflow_dispatch wins over discovery.
+          PHP_IN="${{ inputs.php_versions }}"
+          NODE_IN="${{ inputs.node_versions }}"
+
+          if [ -n "${PHP_IN}" ]; then
+            PHP_VERSIONS="${PHP_IN}"
+          else
+            # major.minor -fpm- (bullseye|bookworm) tags only; patch tags ignored.
+            PHP_VERSIONS=$(crane ls "${PHP_SRC}" 2>/dev/null \
+              | grep -E '^[0-9]+\.[0-9]+-fpm-(bullseye|bookworm)$' \
+              | sed 's/-fpm-.*//' | sort -uV | paste -sd, -)
+          fi
+          if [ -n "${NODE_IN}" ]; then
+            NODE_VERSIONS="${NODE_IN}"
+          else
+            NODE_VERSIONS=$(crane ls "${NODE_SRC}" 2>/dev/null \
+              | grep -E '^[0-9]+-(bullseye|bookworm)$' \
+              | sed 's/-.*//' | sort -un | paste -sd, -)
+          fi
+
+          echo "php_versions=${PHP_VERSIONS}" >> "$GITHUB_OUTPUT"
+          echo "node_versions=${NODE_VERSIONS}" >> "$GITHUB_OUTPUT"
+          echo "Discovered PHP: ${PHP_VERSIONS:-<none — generators use pinned fallback>}"
+          echo "Discovered Node: ${NODE_VERSIONS:-<none — generators use pinned fallback>}"
+
   php-matrix:
     name: Generate Base PHP Matrix
+    needs: discover
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
@@ -33,11 +110,15 @@ jobs:
         with:
           php-version: 8.4
       - id: matrix
+        env:
+          DISCOVERED_PHP_VERSIONS: ${{ needs.discover.outputs.php_versions }}
+          DISCOVERED_NODE_VERSIONS: ${{ needs.discover.outputs.node_versions }}
         run: |
           php .github/workflows/php-matrix/php-generator.php >> $GITHUB_OUTPUT
       - run: echo "Matrix:\n";echo '${{ steps.matrix.outputs.matrix }}'
   node-matrix:
     name: Generate Base PHP-Node Matrix
+    needs: discover
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
@@ -47,11 +128,15 @@ jobs:
         with:
           php-version: 8.4
       - id: matrix
+        env:
+          DISCOVERED_PHP_VERSIONS: ${{ needs.discover.outputs.php_versions }}
+          DISCOVERED_NODE_VERSIONS: ${{ needs.discover.outputs.node_versions }}
         run: |
           php .github/workflows/php-matrix/node-generator.php >> $GITHUB_OUTPUT
       - run: echo "Matrix:\n";echo '${{ steps.matrix.outputs.matrix }}'
   full-matrix:
     name: Generate Full Matrix
+    needs: discover
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
@@ -61,12 +146,15 @@ jobs:
         with:
           php-version: 8.4
       - id: matrix
+        env:
+          DISCOVERED_PHP_VERSIONS: ${{ needs.discover.outputs.php_versions }}
+          DISCOVERED_NODE_VERSIONS: ${{ needs.discover.outputs.node_versions }}
         run: |
           php .github/workflows/php-matrix/full-generator.php >> $GITHUB_OUTPUT
       - run: echo "Matrix:\n";echo '${{ steps.matrix.outputs.matrix }}'
 
   php-fpm-build:
-    needs: php-matrix
+    needs: [ discover, php-matrix ]
     name: PHP-FPM ${{ matrix.php_version }} (${{ matrix.arch.cache_arch }})
     runs-on: ${{ matrix.arch.runs_on }}
     permissions:
@@ -91,13 +179,6 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker Hub
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Build and push by digest (${{ matrix.arch.cache_arch }})
         id: build
         uses: docker/build-push-action@v6
@@ -108,7 +189,7 @@ jobs:
           build-args: |
             PHP_VERSION=${{ matrix.php_version }}
             OS_RELEASE=${{ matrix.php_os_release }}
-            ENV_SOURCE_IMAGE=php
+            ENV_SOURCE_IMAGE=${{ needs.discover.outputs.registry_base != '' && format('{0}/php', needs.discover.outputs.registry_base) || 'php' }}
           tags: ${{ env.REGISTRY_IMAGE }}
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-buildcache
@@ -154,13 +235,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-        if: ${{ !env.ACT }}
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
         if: ${{ !env.ACT }}
 
       - uses: docker/build-push-action@v6
@@ -223,13 +297,6 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker Hub
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Build and push by digest (${{ matrix.arch.cache_arch }})
         id: build
         uses: docker/build-push-action@v6
@@ -290,13 +357,6 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker Hub
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Build and push by digest (${{ matrix.arch.cache_arch }})
         id: build
         uses: docker/build-push-action@v6
@@ -356,13 +416,6 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker Hub
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Build and push by digest (${{ matrix.arch.cache_arch }})
         id: build
         uses: docker/build-push-action@v6
@@ -421,13 +474,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Login to Docker Hub
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push by digest (${{ matrix.arch.cache_arch }})
         id: build
@@ -489,13 +535,6 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker Hub
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Build and push by digest (${{ matrix.arch.cache_arch }})
         id: build
         uses: docker/build-push-action@v6
@@ -530,7 +569,10 @@ jobs:
 
   merge:
     needs: [ php-fpm-build, php-node ]
-    if: ${{ github.ref == 'refs/heads/master' }}
+    # Run even when some build-matrix entries failed, so the combinations that
+    # *did* build are still published. A single flaky build no longer blocks
+    # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
+    if: ${{ !cancelled() && github.ref == 'refs/heads/master' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -555,36 +597,69 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker Hub
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Create and push manifests per PHP version
         working-directory: ${{ runner.temp }}/digests
         run: |
-          set -euo pipefail
+          set -uo pipefail
           REGISTRY_IMAGE="${{ env.REGISTRY_IMAGE }}"
+          # Every image here is built for both architectures, so a complete
+          # multi-arch tag needs exactly this many per-arch digests. A version
+          # with fewer (a flaky single-arch failure) is skipped rather than
+          # published as a broken single-arch manifest — it keeps its previous
+          # image until the next run. Other, complete versions still publish.
+          EXPECTED_ARCHES=2
+
+          shopt -s nullglob
+          if [ -z "$(ls -A 2>/dev/null)" ]; then
+            echo "::warning::No digest artifacts found for ${REGISTRY_IMAGE} — nothing to merge."
+            exit 0
+          fi
+
+          # Digest files are named "<sha256-hex>-<version>" (version may itself
+          # contain dashes, e.g. "8.3-node18"); the sha is dash-free so field 2+
+          # is the version.
           version_names=$(ls | cut -d- -f 2- | sort -u)
+          published=0
+          skipped=0
           # no latest tag creation; only per-version manifests
           for version in $version_names; do
             references=""
+            count=0
             for file in *-"${version}"; do
+              [ -e "$file" ] || continue
               digest_sha256=${file%-${version}}
               references="$references $REGISTRY_IMAGE@sha256:${digest_sha256}"
+              count=$((count + 1))
             done
-            tag_arguments="-t $REGISTRY_IMAGE:${version}"
 
-            echo "Creating manifest for ${version} with references:${references} and tag arguments:${tag_arguments}"
+            if [ "$count" -lt "$EXPECTED_ARCHES" ]; then
+              echo "::warning::Skipping ${REGISTRY_IMAGE}:${version} — only ${count}/${EXPECTED_ARCHES} arch digest(s) present; keeping previous image."
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            echo "Creating manifest for ${version} (${count} arches):${references}"
             # shellcheck disable=SC2086
-            docker buildx imagetools create ${tag_arguments} ${references}
+            if docker buildx imagetools create -t "$REGISTRY_IMAGE:${version}" ${references}; then
+              published=$((published + 1))
+            else
+              echo "::warning::Failed to publish ${REGISTRY_IMAGE}:${version}; continuing with remaining versions."
+              skipped=$((skipped + 1))
+            fi
           done
+
+          echo "Published ${published} tag(s), skipped ${skipped}, for ${REGISTRY_IMAGE}."
+          if [ "$published" -eq 0 ]; then
+            echo "::error::No ${REGISTRY_IMAGE} tags could be published."
+            exit 1
+          fi
 
   merge-xdebug:
     needs: [ xdebug ]
-    if: ${{ github.ref == 'refs/heads/master' }}
+    # Run even when some build-matrix entries failed, so the combinations that
+    # *did* build are still published. A single flaky build no longer blocks
+    # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
+    if: ${{ !cancelled() && github.ref == 'refs/heads/master' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -609,36 +684,69 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker Hub
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Create and push manifests per PHP version
         working-directory: ${{ runner.temp }}/xdebug-digests
         run: |
-          set -euo pipefail
+          set -uo pipefail
           REGISTRY_IMAGE="${{ env.REGISTRY_XDEBUG }}"
+          # Every image here is built for both architectures, so a complete
+          # multi-arch tag needs exactly this many per-arch digests. A version
+          # with fewer (a flaky single-arch failure) is skipped rather than
+          # published as a broken single-arch manifest — it keeps its previous
+          # image until the next run. Other, complete versions still publish.
+          EXPECTED_ARCHES=2
+
+          shopt -s nullglob
+          if [ -z "$(ls -A 2>/dev/null)" ]; then
+            echo "::warning::No digest artifacts found for ${REGISTRY_IMAGE} — nothing to merge."
+            exit 0
+          fi
+
+          # Digest files are named "<sha256-hex>-<version>" (version may itself
+          # contain dashes, e.g. "8.3-node18"); the sha is dash-free so field 2+
+          # is the version.
           version_names=$(ls | cut -d- -f 2- | sort -u)
+          published=0
+          skipped=0
           # no latest tag creation; only per-version manifests
           for version in $version_names; do
             references=""
+            count=0
             for file in *-"${version}"; do
+              [ -e "$file" ] || continue
               digest_sha256=${file%-${version}}
               references="$references $REGISTRY_IMAGE@sha256:${digest_sha256}"
+              count=$((count + 1))
             done
-            tag_arguments="-t $REGISTRY_IMAGE:${version}"
 
-            echo "Creating manifest for ${version} with references:${references} and tag arguments:${tag_arguments}"
+            if [ "$count" -lt "$EXPECTED_ARCHES" ]; then
+              echo "::warning::Skipping ${REGISTRY_IMAGE}:${version} — only ${count}/${EXPECTED_ARCHES} arch digest(s) present; keeping previous image."
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            echo "Creating manifest for ${version} (${count} arches):${references}"
             # shellcheck disable=SC2086
-            docker buildx imagetools create ${tag_arguments} ${references}
+            if docker buildx imagetools create -t "$REGISTRY_IMAGE:${version}" ${references}; then
+              published=$((published + 1))
+            else
+              echo "::warning::Failed to publish ${REGISTRY_IMAGE}:${version}; continuing with remaining versions."
+              skipped=$((skipped + 1))
+            fi
           done
+
+          echo "Published ${published} tag(s), skipped ${skipped}, for ${REGISTRY_IMAGE}."
+          if [ "$published" -eq 0 ]; then
+            echo "::error::No ${REGISTRY_IMAGE} tags could be published."
+            exit 1
+          fi
 
   merge-magento1:
     needs: [ magento1 ]
-    if: ${{ github.ref == 'refs/heads/master' }}
+    # Run even when some build-matrix entries failed, so the combinations that
+    # *did* build are still published. A single flaky build no longer blocks
+    # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
+    if: ${{ !cancelled() && github.ref == 'refs/heads/master' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -663,36 +771,69 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker Hub
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Create and push manifests per PHP version
         working-directory: ${{ runner.temp }}/magento1-digests
         run: |
-          set -euo pipefail
+          set -uo pipefail
           REGISTRY_IMAGE="${{ env.REGISTRY_MAGENTO1 }}"
+          # Every image here is built for both architectures, so a complete
+          # multi-arch tag needs exactly this many per-arch digests. A version
+          # with fewer (a flaky single-arch failure) is skipped rather than
+          # published as a broken single-arch manifest — it keeps its previous
+          # image until the next run. Other, complete versions still publish.
+          EXPECTED_ARCHES=2
+
+          shopt -s nullglob
+          if [ -z "$(ls -A 2>/dev/null)" ]; then
+            echo "::warning::No digest artifacts found for ${REGISTRY_IMAGE} — nothing to merge."
+            exit 0
+          fi
+
+          # Digest files are named "<sha256-hex>-<version>" (version may itself
+          # contain dashes, e.g. "8.3-node18"); the sha is dash-free so field 2+
+          # is the version.
           version_names=$(ls | cut -d- -f 2- | sort -u)
+          published=0
+          skipped=0
           # no latest tag creation; only per-version manifests
           for version in $version_names; do
             references=""
+            count=0
             for file in *-"${version}"; do
+              [ -e "$file" ] || continue
               digest_sha256=${file%-${version}}
               references="$references $REGISTRY_IMAGE@sha256:${digest_sha256}"
+              count=$((count + 1))
             done
-            tag_arguments="-t $REGISTRY_IMAGE:${version}"
 
-            echo "Creating manifest for ${version} with references:${references} and tag arguments:${tag_arguments}"
+            if [ "$count" -lt "$EXPECTED_ARCHES" ]; then
+              echo "::warning::Skipping ${REGISTRY_IMAGE}:${version} — only ${count}/${EXPECTED_ARCHES} arch digest(s) present; keeping previous image."
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            echo "Creating manifest for ${version} (${count} arches):${references}"
             # shellcheck disable=SC2086
-            docker buildx imagetools create ${tag_arguments} ${references}
+            if docker buildx imagetools create -t "$REGISTRY_IMAGE:${version}" ${references}; then
+              published=$((published + 1))
+            else
+              echo "::warning::Failed to publish ${REGISTRY_IMAGE}:${version}; continuing with remaining versions."
+              skipped=$((skipped + 1))
+            fi
           done
+
+          echo "Published ${published} tag(s), skipped ${skipped}, for ${REGISTRY_IMAGE}."
+          if [ "$published" -eq 0 ]; then
+            echo "::error::No ${REGISTRY_IMAGE} tags could be published."
+            exit 1
+          fi
 
   merge-magento2:
     needs: [ magento2 ]
-    if: ${{ github.ref == 'refs/heads/master' }}
+    # Run even when some build-matrix entries failed, so the combinations that
+    # *did* build are still published. A single flaky build no longer blocks
+    # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
+    if: ${{ !cancelled() && github.ref == 'refs/heads/master' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -717,36 +858,69 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker Hub
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Create and push manifests per PHP version
         working-directory: ${{ runner.temp }}/magento2-digests
         run: |
-          set -euo pipefail
+          set -uo pipefail
           REGISTRY_IMAGE="${{ env.REGISTRY_MAGENTO2 }}"
+          # Every image here is built for both architectures, so a complete
+          # multi-arch tag needs exactly this many per-arch digests. A version
+          # with fewer (a flaky single-arch failure) is skipped rather than
+          # published as a broken single-arch manifest — it keeps its previous
+          # image until the next run. Other, complete versions still publish.
+          EXPECTED_ARCHES=2
+
+          shopt -s nullglob
+          if [ -z "$(ls -A 2>/dev/null)" ]; then
+            echo "::warning::No digest artifacts found for ${REGISTRY_IMAGE} — nothing to merge."
+            exit 0
+          fi
+
+          # Digest files are named "<sha256-hex>-<version>" (version may itself
+          # contain dashes, e.g. "8.3-node18"); the sha is dash-free so field 2+
+          # is the version.
           version_names=$(ls | cut -d- -f 2- | sort -u)
+          published=0
+          skipped=0
           # no latest tag creation; only per-version manifests
           for version in $version_names; do
             references=""
+            count=0
             for file in *-"${version}"; do
+              [ -e "$file" ] || continue
               digest_sha256=${file%-${version}}
               references="$references $REGISTRY_IMAGE@sha256:${digest_sha256}"
+              count=$((count + 1))
             done
-            tag_arguments="-t $REGISTRY_IMAGE:${version}"
 
-            echo "Creating manifest for ${version} with references:${references} and tag arguments:${tag_arguments}"
+            if [ "$count" -lt "$EXPECTED_ARCHES" ]; then
+              echo "::warning::Skipping ${REGISTRY_IMAGE}:${version} — only ${count}/${EXPECTED_ARCHES} arch digest(s) present; keeping previous image."
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            echo "Creating manifest for ${version} (${count} arches):${references}"
             # shellcheck disable=SC2086
-            docker buildx imagetools create ${tag_arguments} ${references}
+            if docker buildx imagetools create -t "$REGISTRY_IMAGE:${version}" ${references}; then
+              published=$((published + 1))
+            else
+              echo "::warning::Failed to publish ${REGISTRY_IMAGE}:${version}; continuing with remaining versions."
+              skipped=$((skipped + 1))
+            fi
           done
+
+          echo "Published ${published} tag(s), skipped ${skipped}, for ${REGISTRY_IMAGE}."
+          if [ "$published" -eq 0 ]; then
+            echo "::error::No ${REGISTRY_IMAGE} tags could be published."
+            exit 1
+          fi
 
   merge-magento2-xdebug:
     needs: [ magento2-xdebug ]
-    if: ${{ github.ref == 'refs/heads/master' }}
+    # Run even when some build-matrix entries failed, so the combinations that
+    # *did* build are still published. A single flaky build no longer blocks
+    # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
+    if: ${{ !cancelled() && github.ref == 'refs/heads/master' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -771,36 +945,69 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker Hub
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Create and push manifests per PHP version
         working-directory: ${{ runner.temp }}/magento2-debug-digests
         run: |
-          set -euo pipefail
+          set -uo pipefail
           REGISTRY_IMAGE="${{ env.REGISTRY_MAGENTO2_DEBUG }}"
+          # Every image here is built for both architectures, so a complete
+          # multi-arch tag needs exactly this many per-arch digests. A version
+          # with fewer (a flaky single-arch failure) is skipped rather than
+          # published as a broken single-arch manifest — it keeps its previous
+          # image until the next run. Other, complete versions still publish.
+          EXPECTED_ARCHES=2
+
+          shopt -s nullglob
+          if [ -z "$(ls -A 2>/dev/null)" ]; then
+            echo "::warning::No digest artifacts found for ${REGISTRY_IMAGE} — nothing to merge."
+            exit 0
+          fi
+
+          # Digest files are named "<sha256-hex>-<version>" (version may itself
+          # contain dashes, e.g. "8.3-node18"); the sha is dash-free so field 2+
+          # is the version.
           version_names=$(ls | cut -d- -f 2- | sort -u)
+          published=0
+          skipped=0
           # no latest tag creation; only per-version manifests
           for version in $version_names; do
             references=""
+            count=0
             for file in *-"${version}"; do
+              [ -e "$file" ] || continue
               digest_sha256=${file%-${version}}
               references="$references $REGISTRY_IMAGE@sha256:${digest_sha256}"
+              count=$((count + 1))
             done
-            tag_arguments="-t $REGISTRY_IMAGE:${version}"
 
-            echo "Creating manifest for ${version} with references:${references} and tag arguments:${tag_arguments}"
+            if [ "$count" -lt "$EXPECTED_ARCHES" ]; then
+              echo "::warning::Skipping ${REGISTRY_IMAGE}:${version} — only ${count}/${EXPECTED_ARCHES} arch digest(s) present; keeping previous image."
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            echo "Creating manifest for ${version} (${count} arches):${references}"
             # shellcheck disable=SC2086
-            docker buildx imagetools create ${tag_arguments} ${references}
+            if docker buildx imagetools create -t "$REGISTRY_IMAGE:${version}" ${references}; then
+              published=$((published + 1))
+            else
+              echo "::warning::Failed to publish ${REGISTRY_IMAGE}:${version}; continuing with remaining versions."
+              skipped=$((skipped + 1))
+            fi
           done
+
+          echo "Published ${published} tag(s), skipped ${skipped}, for ${REGISTRY_IMAGE}."
+          if [ "$published" -eq 0 ]; then
+            echo "::error::No ${REGISTRY_IMAGE} tags could be published."
+            exit 1
+          fi
 
   merge-wordpress:
     needs: [ wordpress ]
-    if: ${{ github.ref == 'refs/heads/master' }}
+    # Run even when some build-matrix entries failed, so the combinations that
+    # *did* build are still published. A single flaky build no longer blocks
+    # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
+    if: ${{ !cancelled() && github.ref == 'refs/heads/master' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -825,29 +1032,59 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker Hub
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Create and push manifests per PHP version
         working-directory: ${{ runner.temp }}/wordpress-digests
         run: |
-          set -euo pipefail
+          set -uo pipefail
           REGISTRY_IMAGE="${{ env.REGISTRY_WORDPRESS }}"
+          # Every image here is built for both architectures, so a complete
+          # multi-arch tag needs exactly this many per-arch digests. A version
+          # with fewer (a flaky single-arch failure) is skipped rather than
+          # published as a broken single-arch manifest — it keeps its previous
+          # image until the next run. Other, complete versions still publish.
+          EXPECTED_ARCHES=2
+
+          shopt -s nullglob
+          if [ -z "$(ls -A 2>/dev/null)" ]; then
+            echo "::warning::No digest artifacts found for ${REGISTRY_IMAGE} — nothing to merge."
+            exit 0
+          fi
+
+          # Digest files are named "<sha256-hex>-<version>" (version may itself
+          # contain dashes, e.g. "8.3-node18"); the sha is dash-free so field 2+
+          # is the version.
           version_names=$(ls | cut -d- -f 2- | sort -u)
+          published=0
+          skipped=0
           # no latest tag creation; only per-version manifests
           for version in $version_names; do
             references=""
+            count=0
             for file in *-"${version}"; do
+              [ -e "$file" ] || continue
               digest_sha256=${file%-${version}}
               references="$references $REGISTRY_IMAGE@sha256:${digest_sha256}"
+              count=$((count + 1))
             done
-            tag_arguments="-t $REGISTRY_IMAGE:${version}"
 
-            echo "Creating manifest for ${version} with references:${references} and tag arguments:${tag_arguments}"
+            if [ "$count" -lt "$EXPECTED_ARCHES" ]; then
+              echo "::warning::Skipping ${REGISTRY_IMAGE}:${version} — only ${count}/${EXPECTED_ARCHES} arch digest(s) present; keeping previous image."
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            echo "Creating manifest for ${version} (${count} arches):${references}"
             # shellcheck disable=SC2086
-            docker buildx imagetools create ${tag_arguments} ${references}
+            if docker buildx imagetools create -t "$REGISTRY_IMAGE:${version}" ${references}; then
+              published=$((published + 1))
+            else
+              echo "::warning::Failed to publish ${REGISTRY_IMAGE}:${version}; continuing with remaining versions."
+              skipped=$((skipped + 1))
+            fi
           done
+
+          echo "Published ${published} tag(s), skipped ${skipped}, for ${REGISTRY_IMAGE}."
+          if [ "$published" -eq 0 ]; then
+            echo "::error::No ${REGISTRY_IMAGE} tags could be published."
+            exit 1
+          fi
