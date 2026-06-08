@@ -107,4 +107,4 @@ jobs:
           build-args: DRAGONFLY_VERSION=${{ env.DRAGONFLY_VERSION }}
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
           tags: ghcr.io/${{ github.repository_owner }}/roll/dragonfly:${{ matrix.version }}
-        if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}
+        if: ${{ !env.ACT }}

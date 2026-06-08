@@ -108,6 +108,14 @@ function resolve_versions(string $envVar, array $pin, array $deny, string $min):
         ? preg_split('/[\s,]+/', trim($raw), -1, PREG_SPLIT_NO_EMPTY)
         : [];
 
+    // Only accept well-formed numeric versions (e.g. "8", "8.4", "8.0.28"). This
+    // drops stray text or pre-release suffixes (e.g. "8.4-rc") from the discovered
+    // list / dispatch override before they reach version sorting and the matrix.
+    $discovered = array_filter(
+        $discovered,
+        static fn($v) => preg_match('/^\d+(\.\d+)*$/', $v) === 1
+    );
+
     // Discovery only ADDS versions newer than the highest pinned one, so
     // intentionally-skipped older minors are never back-filled (this matches the
     // documented policy and the simple-service workflows). The pins themselves are

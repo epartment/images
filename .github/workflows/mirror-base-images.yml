@@ -59,12 +59,16 @@ jobs:
               || echo "::warning::failed to mirror $src -> $dst"
           }
 
-          echo "── PHP (major.minor -fpm- bullseye/bookworm, >= 7.4) ──"
+          # Floor MUST stay <= php-fpm's PHP_MIN_VERSION (php-matrix/constants.php).
+          # php-fpm switches ENV_SOURCE_IMAGE to this mirror for every PHP version
+          # it builds, so any version it builds (currently down to 7.3) must be
+          # mirrored here or that build would fail to pull its base.
+          PHP_FLOOR="7.3"
+          echo "── PHP (major.minor -fpm- bullseye/bookworm, >= ${PHP_FLOOR}) ──"
           for tag in $(crane ls php 2>/dev/null \
               | grep -E '^[0-9]+\.[0-9]+-fpm-(bullseye|bookworm)$' | sort -uV); do
             ver=${tag%%-*}
-            # floor 7.4
-            [ "$(printf '7.4\n%s\n' "$ver" | sort -V | head -n1)" = "7.4" ] || continue
+            [ "$(printf '%s\n%s\n' "$PHP_FLOOR" "$ver" | sort -V | head -n1)" = "$PHP_FLOOR" ] || continue
             mirror "php:${tag}" "${BASE}/php:${tag}"
           done
 

@@ -57,8 +57,9 @@ service workflow triggers on:
 - **`push`** touching that service's directory or its workflow file.
 
 Images are only **pushed** when running on `master` (`github.ref == 'refs/heads/master'`).
-On other branches and pull requests the workflow still runs to validate the change
-but skips the registry push.
+On other branches the service workflows still **build** the image to validate the
+change and skip only the push. (The lone exception is `docker-image-php-fpm.yml`,
+whose matrix is large enough that it builds only on `master`.)
 
 Every workflow has the same two-stage shape:
 

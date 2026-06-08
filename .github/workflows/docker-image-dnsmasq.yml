@@ -34,4 +34,4 @@ jobs:
           build-args: WEBPROC_VERSION=0.4.0
           push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
           tags: ghcr.io/${{ github.repository_owner }}/roll/dnsmasq:latest
-        if: ${{ !env.ACT && github.ref == 'refs/heads/master'}}
+        if: ${{ !env.ACT }}
