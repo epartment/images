@@ -1,0 +1,91 @@
+name: Mirror Base Images
+
+# Mirrors the upstream base images that php-fpm builds FROM (php, node, composer,
+# phantomjs) into the GHCR namespace `ghcr.io/<owner>/base-images/*`. This
+# insulates the heavy php-fpm matrix from Docker Hub pull-rate limits / outages —
+# a common source of transient build failures.
+#
+# It is OPTIONAL: the php-fpm workflow's `discover` job uses the mirror when it
+# exists and transparently falls back to Docker Hub when it does not. Run this
+# once (workflow_dispatch) to populate the mirror, after which the weekly
+# schedule keeps it fresh.
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_mirror:
+        description: 'Re-copy even if the target tag already exists'
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    # Weekly, Sunday 01:00 UTC — ahead of the daily php-fpm build.
+    - cron: '0 1 * * 0'
+
+jobs:
+  mirror:
+    name: Mirror upstream base images to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: imjasonh/setup-crane@v0.4
+
+      - name: Login to GHCR
+        if: ${{ !env.ACT }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Mirror images
+        run: |
+          set -uo pipefail
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          BASE="ghcr.io/${OWNER}/base-images"
+          FORCE="${{ inputs.force_mirror }}"
+
+          # copy SRC -> DST unless DST already exists (and not forcing).
+          mirror() {
+            local src="$1" dst="$2"
+            if [ "$FORCE" != "true" ] && crane manifest "$dst" >/dev/null 2>&1; then
+              echo "✓ already mirrored: $dst"
+              return 0
+            fi
+            echo "🔄 $src -> $dst"
+            crane copy "$src" "$dst" && echo "✅ mirrored $dst" \
+              || echo "::warning::failed to mirror $src -> $dst"
+          }
+
+          # Floor MUST stay <= php-fpm's PHP_MIN_VERSION (php-matrix/constants.php).
+          # php-fpm switches ENV_SOURCE_IMAGE to this mirror for every PHP version
+          # it builds, so any version it builds (currently down to 7.3) must be
+          # mirrored here or that build would fail to pull its base.
+          PHP_FLOOR="7.3"
+          echo "── PHP (major.minor -fpm- bullseye/bookworm, >= ${PHP_FLOOR}) ──"
+          for tag in $(crane ls php 2>/dev/null \
+              | grep -E '^[0-9]+\.[0-9]+-fpm-(bullseye|bookworm)$' | sort -uV); do
+            ver=${tag%%-*}
+            [ "$(printf '%s\n%s\n' "$PHP_FLOOR" "$ver" | sort -V | head -n1)" = "$PHP_FLOOR" ] || continue
+            mirror "php:${tag}" "${BASE}/php:${tag}"
+          done
+
+          echo "── Node (major -bullseye/bookworm, >= 14) ──"
+          for tag in $(crane ls node 2>/dev/null \
+              | grep -E '^[0-9]+-(bullseye|bookworm)$' | sort -uV); do
+            ver=${tag%%-*}
+            [ "$ver" -ge 14 ] 2>/dev/null || continue
+            mirror "node:${tag}" "${BASE}/node:${tag}"
+          done
+
+          echo "── Composer ──"
+          for tag in 1 2 2.2; do
+            mirror "composer:${tag}" "${BASE}/composer:${tag}"
+          done
+
+          echo "── PhantomJS ──"
+          mirror "99designs/phantomjs:2.1.1" "${BASE}/phantomjs:2.1.1"
+
+          echo "Done. Mirror namespace: ${BASE}/*"

@@ -16,8 +16,13 @@ ENV GROUP_ID        20
 ENV OSTYPE          darwin220
 ENV ADD_PHP_EXT     ""
 
-# PHP Extension Installer
-ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
+# PHP Extension Installer.
+# Fetched with curl (not ADD) so a transient network blip retries instead of
+# failing the whole build. curl ships in the official php base image.
+RUN set -eux; \
+    curl -fSL --retry 5 --retry-delay 5 --retry-all-errors \
+      -o /usr/local/bin/install-php-extensions \
+      https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions
 
 # Copy mhsendmail to PHP
 COPY --from=mhs-builder /go/bin/sendmail /usr/local/bin/mhsendmail
@@ -152,11 +157,19 @@ RUN set -eux; \
         echo 'fi'; \
 	} >> /etc/bash.bashrc;
 
-# Install Oh My Zsh including the following Plugins: git, composer and n98-magerun
-RUN sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-RUN git clone https://github.com/zsh-users/zsh-autosuggestions.git $ZSH_CUSTOM/plugins/zsh-autosuggestions \
-    && git clone https://github.com/zsh-users/zsh-syntax-highlighting.git $ZSH_CUSTOM/plugins/zsh-syntax-highlighting \
-    && sed -i 's/plugins=(git)/plugins=(git composer n98-magerun zsh-autosuggestions zsh-syntax-highlighting)/g' /root/.zshrc
+# Install Oh My Zsh including the following Plugins: git, composer and n98-magerun.
+# curl retries transient failures; the git clones retry in a loop so a flaky
+# network fetch doesn't fail the whole image build.
+RUN sh -c "$(curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+RUN set -eux; \
+    for repo in zsh-users/zsh-autosuggestions zsh-users/zsh-syntax-highlighting; do \
+      dest="$ZSH_CUSTOM/plugins/$(basename "$repo")"; \
+      n=0; until git clone "https://github.com/${repo}.git" "$dest"; do \
+        n=$((n + 1)); [ "$n" -ge 5 ] && { echo "git clone $repo failed after $n attempts"; exit 1; }; \
+        echo "git clone $repo failed, retry $n..."; sleep 10; \
+      done; \
+    done; \
+    sed -i 's/plugins=(git)/plugins=(git composer n98-magerun zsh-autosuggestions zsh-syntax-highlighting)/g' /root/.zshrc
 
 # Configure www-data user as primary php-fpm user for better local dev experience
 RUN mkdir -p /home/www-data \

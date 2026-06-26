@@ -14,8 +14,8 @@ PHP — which is why this repo's images and the nginx vhost templates
 There is no application code here — each top-level directory is one service image
 (its `Dockerfile` plus supporting config), and each has a matching GitHub Actions
 workflow that builds it for `linux/amd64` + `linux/arm64` and publishes it to
-`ghcr.io/epartment/roll/<name>`. (Workflows also log in to Docker Hub, but no
-`docker.io` image tags are currently created — only GHCR is pushed.)
+`ghcr.io/epartment/roll/<name>`. Only GHCR is pushed (the old Docker Hub login/tags
+have been removed).
 
 Services: `php-fpm` (the complex one — see below), `nginx`, `varnish`,
 `mariadb`, `mysql`, `mongo`, `redis`, `dragonfly`, `elasticsearch`, `opensearch`,
@@ -32,6 +32,21 @@ by `.github/workflows/docker-image-*.yml`. Each workflow triggers on:
 
 Images are only pushed when `github.ref == 'refs/heads/master'` (and not under
 `act`). On other branches/PRs the workflow runs the build but skips the push.
+
+Every workflow has a two-stage shape: a **`discover`** job decides which versions to
+build, then a **build matrix** builds each version as an independent job. `fail-fast:
+false` is set everywhere, so one version failing never stops the others.
+
+**Robustness invariants to preserve when editing workflows:**
+- Build-matrix jobs are independent (`fail-fast: false`) — never introduce a shared
+  failure point across versions.
+- php-fpm `merge-*` jobs run with `if: ${{ !cancelled() && ... }}` and publish only
+  versions that have **both** arch digests (`EXPECTED_ARCHES=2`), skipping incomplete
+  ones rather than failing. This is what stops one flaky combination from blocking
+  every tag — don't revert it to a plain `needs:`-gated merge.
+- EOL/experimental combinations are `continue-on-error` (see `constants.php`).
+- In-Dockerfile downloads use `curl --retry` / retry loops, not bare `ADD <url>` or a
+  single `composer require`/`npm install`.
 
 **`.trigger`** at the repo root is a no-op file listed in the `paths:` of many
 workflows. Editing it (e.g. changing the UUID) is the way to force a rebuild of
@@ -64,28 +79,50 @@ stage's registry image as `ENV_SOURCE_IMAGE` so layers stack. Version-conditiona
 logic inside the Dockerfiles is done with shell `sort -g`/`sort -V` comparisons on
 `${PHP_VERSION}` (e.g. "install imagick only if PHP > 7.2 && < 8.3").
 
-### Version matrix is generated, not hand-written
+### Version matrix is discovered + generated, not hard-coded
 
-`docker-image-php-fpm.yml` does not hard-code versions. Three PHP scripts in
-`.github/workflows/php-matrix/` emit the GitHub Actions matrix JSON:
+`docker-image-php-fpm.yml` does not hard-code versions. Its **`discover`** job lists
+the upstream `php`/`node` tags with crane (preferring the GHCR `base-images` mirror,
+falling back to Docker Hub) and passes them to three PHP generator scripts in
+`.github/workflows/php-matrix/` via the `DISCOVERED_PHP_VERSIONS` /
+`DISCOVERED_NODE_VERSIONS` env vars. The generators emit the GitHub Actions matrix
+JSON (one entry per PHP × Node × arch):
 
-- `constants.php` — **single source of truth**: `PHP_VERSIONS`, `NODE_VERSIONS`,
-  per-version Debian `OS_RELEASE`, EOL/experimental lists, and the `ARCHES`
-  (amd64 / arm64 runner definitions). **Edit this to add/drop a PHP or Node version.**
+- `constants.php` — the **policy / single source of truth**: floor (`*_MIN_VERSION`),
+  always-build + fallback (`*_PIN_VERSIONS`), exclude (`*_DENY_VERSIONS`), per-version
+  Debian `OS_RELEASE` maps, EOL/experimental/xdebug lists, and `ARCHES`. The
+  `php_versions()` / `node_versions()` helpers resolve discovered ∪ pinned − deny,
+  above the floor. **Edit this to add/pin/exclude a PHP or Node version** (see the
+  file header and README → "Adding or changing a version").
 - `php-generator.php` — base PHP × arch (for the base php-fpm build).
 - `node-generator.php` — PHP × Node × arch (for the +node layer).
 - `full-generator.php` — PHP × Node × arch with xdebug/EOL/`latest` flags (for the
   Magento/WordPress/xdebug layers).
 
+Run a generator locally to preview the matrix (it falls back to the pinned lists when
+the `DISCOVERED_*` env vars are unset):
+`php .github/workflows/php-matrix/full-generator.php | sed 's/^matrix=//' | jq`.
+
+The simple per-service workflows use the same floor/pin/deny policy, but inline as
+shell variables (`MIN` / `PIN` / `DENY`) in their own `discover` job, plus a
+`versions` `workflow_dispatch` input for ad-hoc builds.
+
 ### Multi-arch via digest + manifest merge
 
 Each layer is built **per-architecture separately** (on native amd64 and arm64
-runners), pushed `push-by-digest=true` (no tag), and the digest uploaded as an
-artifact. Separate `merge*` jobs then download all digests for a given image,
+runners — no QEMU), pushed `push-by-digest=true` (no tag), and the digest uploaded as
+an artifact. Separate `merge*` jobs then download all digests for a given image,
 group them by PHP version, and run `docker buildx imagetools create` to assemble
-the multi-arch manifest tagged `:<php_version>`. No `latest` tag is created. When
+the multi-arch manifest tagged `:<php_version>`. A version is published **only when
+both arch digests are present** (incomplete ones are skipped, keeping their previous
+image); the merge runs even if some builds failed. No `latest` tag is created. When
 adding a new layered image, you must add both a build job (emitting digests) and a
 matching `merge-*` job (assembling the manifest) — they go together.
+
+There is also an optional `mirror-base-images.yml` workflow that mirrors the upstream
+bases (`php`/`node`/`composer`/`phantomjs`) into `ghcr.io/<owner>/base-images/*` to
+insulate builds from Docker Hub rate limits; php-fpm's `discover` uses it when present
+and falls back to Docker Hub otherwise.
 
 ## Runtime behaviour of php-fpm images
 
@@ -102,8 +139,10 @@ intact when editing the entrypoint.
 ## Conventions
 
 - Image tags are the upstream version string (`redis:7.2`, `php-fpm-magento2:8.3`),
-  driven by each workflow's `matrix.version`. Simple services hard-code the version
-  list in the workflow `strategy.matrix`; only php-fpm uses generated matrices.
+  driven by each workflow's `matrix.version`. Every service now derives its matrix
+  from a `discover` job (floor/pin/deny policy); php-fpm additionally runs the
+  `php-matrix` generators. No service hard-codes its full version list anymore
+  (legacy fixed jobs like `mysql-legacy` / `varnish-lts` are the exception).
 - Registry owner comes from `github.repository_owner` (so forks publish under their
   own namespace) — env blocks that say `ghcr.io/epartment/...` are the canonical
   upstream targets.

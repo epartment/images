@@ -1,6 +1,11 @@
 name: Docker Image OpenSearch
 on:
   workflow_dispatch:
+    inputs:
+      versions:
+        description: 'Versions (major.minor, comma-separated). Empty = auto-discover.'
+        required: false
+        type: string
   schedule:
     - cron: "0 6 * * *" # 6 AM Daily
   push:
@@ -10,24 +15,69 @@ on:
       - .github/workflows/docker-image-opensearch.yml
 
 jobs:
-  opensearch:
-    name: OpenSearch
+  # Discover which versions to build: the pinned list is always built and any
+  # upstream major.minor newer than the highest pinned one is added automatically.
+  # The major.minor is resolved to its latest patch at build time below.
+  # Edit PIN to curate, DENY to exclude, MIN for the floor. See README.
+  discover:
+    name: Discover OpenSearch versions
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.discover.outputs.matrix }}
+      build: ${{ steps.discover.outputs.build }}
+    steps:
+      - name: Discover versions
+        id: discover
+        run: |
+          set -uo pipefail
+          UPSTREAM="docker.io/opensearchproject/opensearch"
+          MIN="2.9"                                              # floor — ignore anything older
+          PIN="2.9 2.10 2.11 2.12 2.13 2.19 3.1 3.2 3.3"         # always built + fallback if discovery fails
+          DENY=""                                                # never build these
+          OVERRIDE="${{ inputs.versions }}"
 
+          MAXPIN=$(printf '%s\n' $PIN | sort -V | tail -1)
+          if [ -n "${OVERRIDE}" ]; then
+            CAND=$(echo "$OVERRIDE" | tr ', ' '\n' | grep -v '^$' || true)
+          else
+            # Upstream publishes x.y.z tags; reduce to unique major.minor.
+            DISCOVERED=$(docker run --rm gcr.io/go-containerregistry/crane ls "$UPSTREAM" 2>/dev/null \
+              | sed 's/^v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | awk -F. '{print $1"."$2}' \
+              | sort -uV | paste -sd' ' - || true)
+            NEWER=""
+            for v in $DISCOVERED; do
+              [ "$v" = "$MAXPIN" ] && continue
+              [ "$(printf '%s\n%s\n' "$MAXPIN" "$v" | sort -V | tail -1)" = "$v" ] && NEWER="$NEWER $v"
+            done
+            CAND="$PIN $NEWER"
+          fi
+
+          SEL=""
+          for v in $CAND; do
+            case " $DENY " in *" $v "*) continue ;; esac
+            [ "$(printf '%s\n%s\n' "$MIN" "$v" | sort -V | head -n1)" = "$MIN" ] || continue
+            SEL="$SEL $v"
+          done
+          SEL=$(printf '%s\n' $SEL | grep -v '^$' | sort -uV || true)
+          echo "Selected OpenSearch versions: $(echo $SEL | paste -sd' ' -)"
+
+          if [ -z "$(echo $SEL | tr -d '[:space:]')" ]; then
+            echo 'matrix={"version":[]}' >> "$GITHUB_OUTPUT"
+            echo 'build=false' >> "$GITHUB_OUTPUT"
+          else
+            MATRIX=$(printf '%s\n' $SEL | jq -R . | jq -cs '{version: .}')
+            echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+            echo 'build=true' >> "$GITHUB_OUTPUT"
+          fi
+
+  opensearch:
+    name: OpenSearch ${{ matrix.version }}
+    needs: discover
+    if: needs.discover.outputs.build == 'true'
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        version:
-          - "2.9"
-          - "2.10"
-          - "2.11"
-          - "2.12"
-          - "2.13"
-          - "2.19"
-          - "3.1"
-          - "3.2"
-          - "3.3"
-
+      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -39,13 +89,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-        if: ${{ !env.ACT }}
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
         if: ${{ !env.ACT }}
 
       - name: Set build-args

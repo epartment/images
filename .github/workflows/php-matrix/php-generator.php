@@ -4,9 +4,9 @@ require_once(__DIR__ . DIRECTORY_SEPARATOR . 'constants.php');
 
 $matrix = [];
 
-foreach (PHP_VERSIONS as $phpVersion) {
+foreach (php_versions() as $phpVersion) {
     $experimental = in_array($phpVersion, EXPERIMENTAL_PHP_VERSIONS);
-    $phpOsRelease = array_key_exists($phpVersion, PHP_VERSIONS_OS_RELEASE) ? PHP_VERSIONS_OS_RELEASE[$phpVersion] : 'bullseye';
+    $phpOsRelease = php_os_release($phpVersion);
 
     foreach (ARCHES as $arch) {
         $matrix[] = [
