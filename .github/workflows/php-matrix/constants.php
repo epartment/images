@@ -53,7 +53,7 @@ const ARCHES = [
 const PHP_MIN_VERSION = '7.3';
 const PHP_DENY_VERSIONS = [];
 // Built unconditionally + fallback list when discovery is unavailable.
-const PHP_PIN_VERSIONS = ['7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4'];
+const PHP_PIN_VERSIONS = ['7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5'];
 
 // ---- Node -------------------------------------------------------------------
 const NODE_MIN_VERSION = '10';
@@ -69,6 +69,7 @@ const PHP_VERSIONS_OS_RELEASE = [
     '8.2' => 'bullseye',
     '8.3' => 'bullseye',
     '8.4' => 'bullseye',
+    '8.5' => 'bullseye',
 ];
 const NODE_VERSIONS_OS_RELEASE = [
     '10' => 'stretch',
