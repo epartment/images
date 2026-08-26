@@ -162,8 +162,10 @@ RUN set -eux; \
 # network fetch doesn't fail the whole image build.
 RUN sh -c "$(curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 RUN set -eux; \
+    ZSH_CUSTOM="${ZSH_CUSTOM:-${ZSH:-/root/.oh-my-zsh}/custom}"; \
     for repo in zsh-users/zsh-autosuggestions zsh-users/zsh-syntax-highlighting; do \
       dest="$ZSH_CUSTOM/plugins/$(basename "$repo")"; \
+      mkdir -p "$(dirname "$dest")"; \
       n=0; until git clone "https://github.com/${repo}.git" "$dest"; do \
         n=$((n + 1)); [ "$n" -ge 5 ] && { echo "git clone $repo failed after $n attempts"; exit 1; }; \
         echo "git clone $repo failed, retry $n..."; sleep 10; \
