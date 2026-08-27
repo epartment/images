@@ -9,10 +9,12 @@ published in that time.
 Findings below are grouped by severity. Every claim carries a `file:line`. Claims that could not be
 verified in this repository are labelled *unverified* in the sentence that makes them.
 
-> **The pipeline is currently down.** The last successful run of `Docker Image PHP-FPM` was
-> 2026-05-22; every scheduled run since has failed with zero images published. The cause is
-> [H1](#h1), which is fixed in the working tree but not yet committed. [H2](#h2) will keep the run
-> red until it is also addressed.
+> **Status.** The pipeline published nothing between 2026-05-22 and 2026-08-26. [H1](#h1) is fixed
+> and confirmed in CI (run `32977963468`: 14 of 16 base builds green, up from 0 of 16). That run
+> still published no layer image, because [H2](#h2) failed the two PHP 8.5 jobs and [H5](#h5) then
+> skipped every layer job in the chain. Fixes for H2, H5 and [M6](#m6) are applied in the working
+> tree and not yet committed, along with [M1](#m1) — which is what makes a targeted, minutes-long
+> rebuild of a single PHP/Node pair possible instead of a multi-hour full run.
 
 ## Severity
 
@@ -53,14 +55,16 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
   for a different reason: the pre-rework workflow gated its merge jobs on a plain `needs:`, so the
   single failing combination in run `26326351559` (`PHP-FPM 8.0 + Node 21`) failed the entire run.
   That brittleness is what `5ef0357` set out to fix, and it did.
-- *Suggested fix:* Applied in the working tree, not committed — resolve the variable inside the step
+- *Suggested fix:* **Fixed** in commit `f4e9e15` — resolve the variable inside the step
   with a documented default and create the parent directory before cloning:
 
   ```
   ZSH_CUSTOM="${ZSH_CUSTOM:-${ZSH:-/root/.oh-my-zsh}/custom}"; \
   ```
 
-  Verified: the `8.4` arm64 build now completes, and the plugins land at
+  Confirmed in CI: run `32977963468` built 14 of the 16 base jobs successfully, including
+  `PHP-FPM 8.4 (arm64)`; only the two PHP 8.5 jobs failed, for the unrelated reason in [H2](#h2).
+  Verified locally as well: the `8.4` arm64 build completes, and the plugins land at
   `/root/.oh-my-zsh/custom/plugins/zsh-autosuggestions` and `…/zsh-syntax-highlighting`, with
   `plugins=(git composer n98-magerun zsh-autosuggestions zsh-syntax-highlighting)` in `/root/.zshrc`
   — which they did not before this change, at any point in the repository's history.
@@ -83,12 +87,13 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
   ships on bookworm only — 8.5 today, 8.6 and later by default — is therefore discovered as buildable
   and then pointed at a base tag that does not exist. This recurs on every future release, not just
   8.5.
-- *Suggested fix:* Two steps. Immediately, unblock the run: either map `'8.5' => 'bookworm'` (which
-  requires [H3](#h3) first, because the magento2 layer cannot build on bookworm) or add `'8.5'` to
-  `EXPERIMENTAL_PHP_VERSIONS` so its failure is tolerated. Structurally, have `discover` emit the
-  suite it actually matched alongside the version (for example `8.5:bookworm`) and let
-  `php_os_release()` use the pinned map only as an override, so the default follows upstream instead
-  of guessing.
+- *Suggested fix:* Applied in the working tree — `PHP_DENY_VERSIONS = ['8.5']`, with a comment
+  recording that 8.5 returns once the bookworm migration in [H3](#h3) lands. Note that the other
+  candidate fix does **not** work: adding `'8.5'` to `EXPERIMENTAL_PHP_VERSIONS` has no effect on the
+  base build, because `php-generator.php` never emitted the `continue_on_error` key the workflow
+  reads — see [M6](#m6). Structurally, have `discover` emit the suite it actually matched alongside
+  the version (for example `8.5:bookworm`) and let `php_os_release()` use the pinned map only as an
+  override, so the default follows upstream instead of guessing.
 
 <a id="h3"></a>
 **H3. The whole matrix is pinned to Debian bullseye, and one hardcoded package blocks the move off it** — `.github/workflows/php-matrix/constants.php:64-84`, `php-fpm/magento2/Dockerfile:42`
@@ -133,10 +138,39 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
   `if: ${{ failure() && github.event_name == 'schedule' }}`, reporting the workflow and the failing
   job names. Combine it with [H2](#h2): the alert is only useful once a green run is the normal state.
 
+<a id="h5"></a>
+**H5. One failing PHP version skips every layer build for every version** — `.github/workflows/docker-image-php-fpm.yml:251,311,376,440,504,569`
+
+- *What:* The six layer jobs (`php-node`, `xdebug`, `magento1`, `magento2`, `magento2-xdebug`,
+  `wordpress`) depend on the previous layer with a plain `needs:` and no `if:` guard. GitHub skips a
+  job when **any** job it needs concluded `failure`, and a matrix job's conclusion is the worst of its
+  entries — so `php-fpm-build` reports `failure` if a single PHP version out of eight fails, and every
+  layer job is skipped for all versions.
+- *Why it matters:* This is what made [H1](#h1) a total outage rather than a partial one, and it is
+  still live. Run `32977963468` proves it: 14 of 16 base builds succeeded and the base `merge` job
+  published its tags, yet `php-node` and all five layers below it were **skipped** and the five layer
+  `merge-*` jobs failed with no digests — because the two PHP 8.5 jobs ([H2](#h2)) failed. Fourteen
+  perfectly good PHP versions produced no `php-fpm-magento2`, `php-fpm-magento2-debug` or
+  `php-fpm-wordpress` image because of one version nobody asked for. The repository documents the
+  opposite as an invariant ("build-matrix jobs are independent (`fail-fast: false`) — never introduce a
+  shared failure point across versions"); `fail-fast: false` delivers that only *within* one matrix,
+  not *between* layers, and the `!cancelled()` treatment was applied to the `merge-*` jobs only.
+- *Suggested fix:* Applied in the working tree — give each layer job the same treatment the merge jobs
+  already have, gated on its matrix generator so `fromJson` always has input:
+
+  ```
+  if: ${{ !cancelled() && needs.full-matrix.result == 'success' }}
+  ```
+
+  (`needs.node-matrix.result` for `php-node`.) Combinations whose own base image is missing then fail
+  individually, `fail-fast: false` keeps the rest going, and the `EXPECTED_ARCHES=2` guard in the
+  merge jobs skips exactly those tags — which is the behaviour the merge jobs were already written to
+  expect.
+
 ### Medium
 
 <a id="m1"></a>
-**M1. The `workflow_dispatch` version inputs cannot narrow the build** — `.github/workflows/php-matrix/constants.php:137`
+**M1. The `workflow_dispatch` version inputs cannot narrow the build** — `.github/workflows/php-matrix/constants.php:154`
 
 - *What:* `resolve_versions()` computes `$versions = array_merge($pin, $discovered)`, so the pinned
   list is always included regardless of what discovery or the manual inputs supplied; discovery is
@@ -148,12 +182,17 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
   run ad-hoc builds, and they are inert for that purpose. The escape hatch is missing exactly when it
   is most needed: rebuilding one tag after a targeted fix means sitting through a full run (see
   [M2](#m2)) instead of a two-job one.
-- *Suggested fix:* Treat an explicit dispatch input as a replacement for the resolved set, not an
-  addition to it — pass the manual override through a separate env var (or a flag) that short-circuits
-  the pin merge and the `maxPin` filter, keeping the deny-list and floor applied.
+- *Suggested fix:* Applied in the working tree. `resolve_versions()` takes an optional
+  `$overrideEnvVar`; when that variable is non-empty its list REPLACES the resolved set, skipping both
+  the pin merge and the `maxPin` filter, while the deny-list and floor still apply. The three matrix
+  generator jobs pass `OVERRIDE_PHP_VERSIONS` / `OVERRIDE_NODE_VERSIONS` from `inputs.*`. Verified by
+  running the generators: a dispatch of `php_versions=8.4, node_versions=19` now yields 2 entries per
+  layer instead of 192, a scheduled run with no inputs is unchanged (14 base / 168 full), and an
+  override naming a denied version (`8.5`) or one below the floor (`7.0`) still yields 0 — a dispatch
+  cannot resurrect a deliberately excluded version.
 
 <a id="m2"></a>
-**M2. The matrix is an unpruned cross product throttled to two jobs at a time** — `.github/workflows/php-matrix/full-generator.php:12-19`, `.github/workflows/docker-image-php-fpm.yml:303,363,422,481,541`
+**M2. The matrix is an unpruned cross product throttled to two jobs at a time** — `.github/workflows/php-matrix/full-generator.php:12-19`, `.github/workflows/docker-image-php-fpm.yml:325,390,454,518,583`
 
 - *What:* `full-generator.php` nests PHP × arch × Node with no compatibility filter, producing 192
   entries (8 PHP × 12 Node × 2 arches), consumed by five separate jobs; `node-generator.php` produces
@@ -171,7 +210,7 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
   `max-parallel` accordingly.
 
 <a id="m3"></a>
-**M3. BuildKit is pinned to a 2022 release in every build job** — `.github/workflows/docker-image-php-fpm.yml:192,251,311,371,430,489,549`
+**M3. BuildKit is pinned to a 2022 release in every build job** — `.github/workflows/docker-image-php-fpm.yml:204,268,333,398,462,526,591`
 
 - *What:* Every build job sets `driver-opts: image=moby/buildkit:v0.10.6` while using
   `docker/build-push-action@v6` with `outputs: type=image,push-by-digest=true,name-canonical=true`
@@ -197,7 +236,7 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
 - *Why it matters:* It is invisible today only because each job runs on a native runner of its own
   architecture (`constants.php:33-50` maps arm64 to `ubuntu-24.04-arm`), so the two values coincide.
   But `docker/setup-qemu-action@v3` is present in the layer jobs
-  (`.github/workflows/docker-image-php-fpm.yml:247,307,367,426,485,545`), so cross-building is one
+  (`.github/workflows/docker-image-php-fpm.yml:264,329,394,458,522,587`), so cross-building is one
   configuration change away — and the failure mode is silent: the job would push a host-architecture
   image under the other architecture's digest, and the `merge` job would assemble a manifest claiming
   two architectures that are really one. `--platform` on a build stage is meant for genuine
@@ -223,13 +262,53 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
 - *Suggested fix:* Drop the `|| echo …` so a non-running node fails the build. If the diagnostic
   output is worth keeping on failure, use an explicit `if ! /usr/local/bin/node -v; then … ; exit 1; fi`.
 
+<a id="m6"></a>
+**M6. Two of the three matrix generators never emit `continue_on_error`** — `.github/workflows/php-matrix/php-generator.php`, `.github/workflows/php-matrix/node-generator.php`
+
+- *What:* Every build job declares `continue-on-error: ${{ matrix.continue_on_error || false }}`, but
+  only `full-generator.php` sets that key. `php-generator.php` and `node-generator.php` computed
+  `experimental` and emitted it under a key nothing reads, so the expression always fell through to
+  `false`.
+- *Why it matters:* The stated policy is that EOL and experimental combinations are tolerated so a
+  flaky one cannot fail the run. That policy silently did not apply to the base PHP matrix or the
+  `php-node` matrix — which is exactly where it mattered most, since those two layers gate everything
+  else ([H5](#h5)). It also means the obvious remedy for [H2](#h2) — marking 8.5 experimental — would
+  have appeared to do nothing.
+- *Suggested fix:* Applied in the working tree — both generators now compute `end_of_life` the same
+  way `full-generator.php` does (EOL on either the PHP or the Node side) and emit
+  `'continue_on_error' => $endOfLife || $experimental`. Verified by running the generators: the base
+  matrix now marks 4 of 14 entries continue-on-error (PHP 7.3 and 7.4, both arches) and the node
+  matrix 128 of 168, matching `full-generator.php`.
+
+<a id="m7"></a>
+**M7. Each layer consumes a tag a sibling job publishes, with no ordering between them** — `.github/workflows/docker-image-php-fpm.yml:311,376,440,504,569,620`
+
+- *What:* A layer job takes its parent by tag — `xdebug` builds `FROM ghcr.io/…/php-fpm:8.4-node19`,
+  `magento2-xdebug` from `ghcr.io/…/php-fpm-magento2:8.4-node19`. Those tags are created by the
+  `merge-*` jobs, which assemble the multi-arch manifest from the per-arch digests. But the layer jobs
+  depend on the previous *build* job, not on its merge: `xdebug` has `needs: [php-node, full-matrix]`
+  while `merge` has `needs: [php-fpm-build, php-node]`. They are independent siblings, so nothing
+  orders them — `xdebug` may start the moment `php-node` finishes, while `merge` is still assembling
+  the tag it is about to read.
+- *Why it matters:* Each layer therefore reads whatever version of the parent tag happens to be in the
+  registry when it starts, which in a steady state is the *previous* run's. The practical consequences
+  — that a change to the base image takes several daily runs to reach the bottom of the chain, and
+  that a genuinely new PHP/Node combination fails at the second layer because its parent tag does not
+  exist yet — follow from the dependency graph, but are *unverified* against a real run here; the job
+  timings needed to confirm the ordering empirically were not retrieved. The graph itself is plain
+  from the YAML.
+- *Suggested fix:* Point each layer at the merge job of the layer above it (`needs: [merge, …]`,
+  `needs: [merge-magento2, …]`), keeping the `!cancelled()` guard from [H5](#h5). The chain then
+  builds strictly top-down within one run. Alternatively, pass the parent by digest rather than by
+  tag, which removes the dependency on a manifest existing at all.
+
 ### Low
 
 <a id="l1"></a>
 **L1. Stale no-node tags in the registry misrepresent architecture coverage** — `.github/workflows/php-matrix/full-generator.php`
 
 - *What:* Every tag the current generators produce carries a `-node<N>` suffix
-  (`.github/workflows/docker-image-php-fpm.yml:288,348,407,466,526,585` build the digest filenames
+  (`.github/workflows/docker-image-php-fpm.yml:299,364,428,492,557,621` build the digest filenames
   from `${php_version}-node${node_version}`). Tags without that suffix — for example
   `php-fpm-magento2-debug:8.4` — are leftovers from an earlier tagging scheme and are never refreshed.
 - *Why it matters:* Those stale tags are multi-arch, while the current `-node` tags for the same PHP
@@ -256,17 +335,17 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
 
   | Line | Job name |
   |---|---|
-  | 237 | `PHP-FPM ${{ matrix.php_version }} + Node ${{ matrix.node_version }}` |
-  | 295 | `PHP-FPM ${{ matrix.php_version }} + XDebug - Node ${{ matrix.node_version }}` |
-  | 355 | `Magento 1 PHP-FPM ${{ matrix.php_version }} - Node ${{ matrix.node_version }}` |
-  | 414 | `Magento 2 PHP-FPM ${{ matrix.php_version }} - Node ${{ matrix.node_version }}` |
-  | 473 | `Magento 2 PHP-FPM ${{ matrix.php_version }} + XDebug - Node ${{ matrix.node_version }}` |
-  | 533 | `Wordpress PHP-FPM ${{ matrix.php_version }} - Node ${{ matrix.node_version }}` |
+  | 249 | `PHP-FPM ${{ matrix.php_version }} + Node ${{ matrix.node_version }}` |
+  | 317 | `PHP-FPM ${{ matrix.php_version }} + XDebug - Node ${{ matrix.node_version }}` |
+  | 382 | `Magento 1 PHP-FPM ${{ matrix.php_version }} - Node ${{ matrix.node_version }}` |
+  | 446 | `Magento 2 PHP-FPM ${{ matrix.php_version }} - Node ${{ matrix.node_version }}` |
+  | 510 | `Magento 2 PHP-FPM ${{ matrix.php_version }} + XDebug - Node ${{ matrix.node_version }}` |
+  | 575 | `Wordpress PHP-FPM ${{ matrix.php_version }} - Node ${{ matrix.node_version }}` |
 
 - *Why it matters:* A single-architecture failure is the exact condition the `EXPECTED_ARCHES=2` guard
   in the merge jobs exists to handle, and it is the condition that leaves a tag published for one
   architecture only. Finding which of two same-named jobs failed means opening both.
-- *Suggested fix:* Append `(${{ matrix.arch.cache_arch }})` to each, matching line 178.
+- *Suggested fix:* Append `(${{ matrix.arch.cache_arch }})` to each, matching line 190.
 
 <a id="l4"></a>
 **L4. Dockerfile lint warnings on every base build** — `php-fpm/Dockerfile:8,12-17`
@@ -288,7 +367,7 @@ Recorded so the next reader does not re-investigate them.
 |---|---|
 | Is the missing arm64 manifest caused by the consuming CLI building a wrong tag? | **No.** The `epartment/rolldev` CLI derives the debug image tag from the same PHP version and Node suffix as the non-debug one, so it requests a tag that is simply absent from the registry. The defect is entirely on the publishing side ([H1](#h1)). |
 | Do the external build-stage images support arm64? | **Yes, all of them.** Verified with `docker manifest inspect`: `99designs/phantomjs:2.1.1` (amd64 + arm64), `composer:1`, `composer:2`, `composer:2.2` and `golang:alpine` (all multi-arch). The phantomjs copy at `php-fpm/node/Dockerfile:38` was the strongest suspect for an arm64-only failure and is not one. |
-| Does the `merge` job group digests correctly when base and node artefacts share one directory? | **Yes.** Base digests are named `<sha>-<php>` and node digests `<sha>-<php>-node<n>` (`.github/workflows/docker-image-php-fpm.yml:224,282`), both downloaded under `pattern: digests-*` (line 606). `cut -d- -f 2-` recovers the full version because the sha is dash-free, and the `*-"${version}"` glob does not cross between the two forms. |
+| Does the `merge` job group digests correctly when base and node artefacts share one directory? | **Yes.** Base digests are named `<sha>-<php>` and node digests `<sha>-<php>-node<n>` (`.github/workflows/docker-image-php-fpm.yml:236,299`), both downloaded under `pattern: digests-*` (line 648). `cut -d- -f 2-` recovers the full version because the sha is dash-free, and the `*-"${version}"` glob does not cross between the two forms. |
 | Is the `EXPECTED_ARCHES=2` skip logic sound? | **Yes.** A version with fewer than two arch digests is skipped with a warning and keeps its previous image rather than being republished as a single-arch manifest, and the loop continues to the remaining versions. This is what prevented the outage from *removing* existing tags — the images went stale rather than disappearing. |
 | Do the other pinned PHP base tags exist upstream? | **Yes**, except 8.5 ([H2](#h2)). `php:7.3-fpm-bullseye`, `php:8.3-fpm-bullseye` and `php:8.4-fpm-bullseye` all resolve, as do `node:19-bullseye` and `node:22-bullseye`. |
 | Was the `mailpit` sendmail builder stage or the `install-php-extensions` download the cause? | **No.** Both complete successfully in a local reproduction of the failing build; the base image reaches step 42 of 45 before failing at [H1](#h1). |

@@ -133,6 +133,10 @@ jobs:
         env:
           DISCOVERED_PHP_VERSIONS: ${{ needs.discover.outputs.php_versions }}
           DISCOVERED_NODE_VERSIONS: ${{ needs.discover.outputs.node_versions }}
+          # A manual workflow_dispatch list REPLACES the resolved set rather than
+          # adding to it, so a targeted rebuild really is a two-job run.
+          OVERRIDE_PHP_VERSIONS: ${{ inputs.php_versions }}
+          OVERRIDE_NODE_VERSIONS: ${{ inputs.node_versions }}
         run: |
           php .github/workflows/php-matrix/php-generator.php >> $GITHUB_OUTPUT
       - run: echo "Matrix:\n";echo '${{ steps.matrix.outputs.matrix }}'
@@ -151,6 +155,10 @@ jobs:
         env:
           DISCOVERED_PHP_VERSIONS: ${{ needs.discover.outputs.php_versions }}
           DISCOVERED_NODE_VERSIONS: ${{ needs.discover.outputs.node_versions }}
+          # A manual workflow_dispatch list REPLACES the resolved set rather than
+          # adding to it, so a targeted rebuild really is a two-job run.
+          OVERRIDE_PHP_VERSIONS: ${{ inputs.php_versions }}
+          OVERRIDE_NODE_VERSIONS: ${{ inputs.node_versions }}
         run: |
           php .github/workflows/php-matrix/node-generator.php >> $GITHUB_OUTPUT
       - run: echo "Matrix:\n";echo '${{ steps.matrix.outputs.matrix }}'
@@ -169,6 +177,10 @@ jobs:
         env:
           DISCOVERED_PHP_VERSIONS: ${{ needs.discover.outputs.php_versions }}
           DISCOVERED_NODE_VERSIONS: ${{ needs.discover.outputs.node_versions }}
+          # A manual workflow_dispatch list REPLACES the resolved set rather than
+          # adding to it, so a targeted rebuild really is a two-job run.
+          OVERRIDE_PHP_VERSIONS: ${{ inputs.php_versions }}
+          OVERRIDE_NODE_VERSIONS: ${{ inputs.node_versions }}
         run: |
           php .github/workflows/php-matrix/full-generator.php >> $GITHUB_OUTPUT
       - run: echo "Matrix:\n";echo '${{ steps.matrix.outputs.matrix }}'
@@ -237,6 +249,11 @@ jobs:
     name: PHP-FPM ${{ matrix.php_version }} + Node ${{ matrix.node_version }}
     runs-on: ${{ matrix.arch.runs_on }}
     needs: [ php-fpm-build, node-matrix ]
+    # Run even when some entries of the previous layer failed, so the combinations that did
+    # build still continue down the chain. Without this a single failing PHP version skips
+    # every job in this layer (plain `needs:` skips on ANY failure in the needed job).
+    # Gated on the matrix generator itself succeeding, since `fromJson` needs its output.
+    if: ${{ !cancelled() && needs.node-matrix.result == 'success' }}
     continue-on-error: ${{ matrix.continue_on_error || false }}
     strategy:
       fail-fast: false
@@ -292,6 +309,11 @@ jobs:
 
   xdebug:
     needs: [ php-node, full-matrix ]
+    # Run even when some entries of the previous layer failed, so the combinations that did
+    # build still continue down the chain. Without this a single failing PHP version skips
+    # every job in this layer (plain `needs:` skips on ANY failure in the needed job).
+    # Gated on the matrix generator itself succeeding, since `fromJson` needs its output.
+    if: ${{ !cancelled() && needs.full-matrix.result == 'success' }}
     name: PHP-FPM ${{ matrix.php_version }} + XDebug - Node ${{ matrix.node_version }}
     runs-on: ${{ matrix.arch.runs_on }}
     permissions:
@@ -352,6 +374,11 @@ jobs:
 
   magento1:
     needs: [ full-matrix, php-node ]
+    # Run even when some entries of the previous layer failed, so the combinations that did
+    # build still continue down the chain. Without this a single failing PHP version skips
+    # every job in this layer (plain `needs:` skips on ANY failure in the needed job).
+    # Gated on the matrix generator itself succeeding, since `fromJson` needs its output.
+    if: ${{ !cancelled() && needs.full-matrix.result == 'success' }}
     name: Magento 1 PHP-FPM ${{ matrix.php_version }} - Node ${{ matrix.node_version }}
     runs-on: ${{ matrix.arch.runs_on }}
     permissions:
@@ -411,6 +438,11 @@ jobs:
 
   magento2:
     needs: [ full-matrix, php-node ]
+    # Run even when some entries of the previous layer failed, so the combinations that did
+    # build still continue down the chain. Without this a single failing PHP version skips
+    # every job in this layer (plain `needs:` skips on ANY failure in the needed job).
+    # Gated on the matrix generator itself succeeding, since `fromJson` needs its output.
+    if: ${{ !cancelled() && needs.full-matrix.result == 'success' }}
     name: Magento 2 PHP-FPM ${{ matrix.php_version }} - Node ${{ matrix.node_version }}
     runs-on: ${{ matrix.arch.runs_on }}
     permissions:
@@ -470,6 +502,11 @@ jobs:
 
   magento2-xdebug:
     needs: [ full-matrix, magento2 ]
+    # Run even when some entries of the previous layer failed, so the combinations that did
+    # build still continue down the chain. Without this a single failing PHP version skips
+    # every job in this layer (plain `needs:` skips on ANY failure in the needed job).
+    # Gated on the matrix generator itself succeeding, since `fromJson` needs its output.
+    if: ${{ !cancelled() && needs.full-matrix.result == 'success' }}
     name: Magento 2 PHP-FPM ${{ matrix.php_version }} + XDebug - Node ${{ matrix.node_version }}
     runs-on: ${{ matrix.arch.runs_on }}
     permissions:
@@ -530,6 +567,11 @@ jobs:
 
   wordpress:
     needs: [ full-matrix, php-node ]
+    # Run even when some entries of the previous layer failed, so the combinations that did
+    # build still continue down the chain. Without this a single failing PHP version skips
+    # every job in this layer (plain `needs:` skips on ANY failure in the needed job).
+    # Gated on the matrix generator itself succeeding, since `fromJson` needs its output.
+    if: ${{ !cancelled() && needs.full-matrix.result == 'success' }}
     name: Wordpress PHP-FPM ${{ matrix.php_version }} - Node ${{ matrix.node_version }}
     runs-on: ${{ matrix.arch.runs_on }}
     permissions:

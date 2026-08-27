@@ -51,7 +51,10 @@ const ARCHES = [
 
 // ---- PHP --------------------------------------------------------------------
 const PHP_MIN_VERSION = '7.3';
-const PHP_DENY_VERSIONS = [];
+// 8.5 is excluded until the bookworm migration: upstream publishes php 8.5 only on bookworm,
+// and PHP_VERSIONS_OS_RELEASE forces bullseye, so `php:8.5-fpm-bullseye` does not resolve.
+// Moving it to bookworm first requires the magento2 layer to stop hardcoding libssl1.1.
+const PHP_DENY_VERSIONS = ['8.5'];
 // Built unconditionally + fallback list when discovery is unavailable.
 const PHP_PIN_VERSIONS = ['7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5'];
 
@@ -101,10 +104,21 @@ const NOT_STABLE_XDEBUG_PHP_VERSIONS = ['7.3', '7.4'];
  * reached) the pinned list is what gets built. The deny-list and the version
  * floor are then applied, and the result is de-duplicated and version-sorted
  * ascending.
+ *
+ * $overrideEnvVar is the manual workflow_dispatch input. When it is set it
+ * REPLACES the resolved set instead of adding to it: the pin merge and the
+ * "newer than the highest pin" filter are both skipped, so a dispatch naming an
+ * already-pinned version (e.g. "8.4") really does build only that version. The
+ * deny-list and the floor still apply, so a dispatch cannot resurrect a version
+ * that was deliberately excluded. Without this the inputs are inert, because the
+ * pins are unconditionally merged back in.
  */
-function resolve_versions(string $envVar, array $pin, array $deny, string $min): array
+function resolve_versions(string $envVar, array $pin, array $deny, string $min, string $overrideEnvVar = ''): array
 {
-    $raw = getenv($envVar);
+    $override = $overrideEnvVar !== '' ? getenv($overrideEnvVar) : false;
+    $isOverride = $override !== false && trim($override) !== '';
+
+    $raw = $isOverride ? $override : getenv($envVar);
     $discovered = ($raw !== false && trim($raw) !== '')
         ? preg_split('/[\s,]+/', trim($raw), -1, PREG_SPLIT_NO_EMPTY)
         : [];
@@ -121,20 +135,23 @@ function resolve_versions(string $envVar, array $pin, array $deny, string $min):
     // intentionally-skipped older minors are never back-filled (this matches the
     // documented policy and the simple-service workflows). The pins themselves are
     // always kept. With no pins, every discovered version above the floor is used.
-    $maxPin = null;
-    foreach ($pin as $p) {
-        if ($maxPin === null || version_compare($p, $maxPin, '>')) {
-            $maxPin = $p;
+    // A manual override skips both steps — it is the exact list to build.
+    if (!$isOverride) {
+        $maxPin = null;
+        foreach ($pin as $p) {
+            if ($maxPin === null || version_compare($p, $maxPin, '>')) {
+                $maxPin = $p;
+            }
+        }
+        if ($maxPin !== null) {
+            $discovered = array_filter(
+                $discovered,
+                static fn($v) => version_compare($v, $maxPin, '>')
+            );
         }
     }
-    if ($maxPin !== null) {
-        $discovered = array_filter(
-            $discovered,
-            static fn($v) => version_compare($v, $maxPin, '>')
-        );
-    }
 
-    $versions = array_merge($pin, $discovered);
+    $versions = $isOverride ? $discovered : array_merge($pin, $discovered);
 
     $versions = array_filter($versions, static function ($v) use ($deny, $min) {
         if (in_array($v, $deny, true)) {
@@ -152,13 +169,13 @@ function resolve_versions(string $envVar, array $pin, array $deny, string $min):
 /** The PHP versions to build (discovery ∪ pin, minus deny, above the floor). */
 function php_versions(): array
 {
-    return resolve_versions('DISCOVERED_PHP_VERSIONS', PHP_PIN_VERSIONS, PHP_DENY_VERSIONS, PHP_MIN_VERSION);
+    return resolve_versions('DISCOVERED_PHP_VERSIONS', PHP_PIN_VERSIONS, PHP_DENY_VERSIONS, PHP_MIN_VERSION, 'OVERRIDE_PHP_VERSIONS');
 }
 
 /** The Node versions to build (discovery ∪ pin, minus deny, above the floor). */
 function node_versions(): array
 {
-    return resolve_versions('DISCOVERED_NODE_VERSIONS', NODE_PIN_VERSIONS, NODE_DENY_VERSIONS, NODE_MIN_VERSION);
+    return resolve_versions('DISCOVERED_NODE_VERSIONS', NODE_PIN_VERSIONS, NODE_DENY_VERSIONS, NODE_MIN_VERSION, 'OVERRIDE_NODE_VERSIONS');
 }
 
 /** Highest version in a version-sorted list (used for the `latest` flag). */
