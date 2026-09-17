@@ -46,20 +46,24 @@ RUN set -eux; \
     myloader --version
 
 # Magerun
-# Downloaded with curl --retry (not ADD) so a transient files.magerun.net blip
-# retries instead of failing the build.
+# The unversioned phar is whatever n98 released last, and its Composer runtime requirement rises
+# over time: the current 9.x line needs PHP >= 8.1, so PHP 7.4 and 8.0 were shipping a magerun
+# that aborts on every invocation. Each PHP version therefore names the newest phar verified to
+# run on it, and the smoke test below turns a future recurrence into a failed image build rather
+# than a broken image. Downloaded with curl --retry (not ADD) so a transient files.magerun.net
+# blip retries instead of failing the build.
 RUN set -eux; \
+    case "${PHP_VERSION}" in \
+        7.0|7.1|7.2) magerun_phar="n98-magerun2-4.7.0.phar" ;; \
+        7.3)         magerun_phar="n98-magerun2-6.1.1.phar" ;; \
+        7.4)         magerun_phar="n98-magerun2-7.5.0.phar" ;; \
+        8.0)         magerun_phar="n98-magerun2-8.1.1.phar" ;; \
+        *)           magerun_phar="n98-magerun2.phar" ;; \
+    esac; \
     curl -fSL --retry 5 --retry-delay 5 --retry-all-errors \
-      -o /usr/local/bin/n98-magerun2 https://files.magerun.net/n98-magerun2.phar
-
-# overwrite n98-magerun2 for specific version of PHP if needed
-# If PHP = 7.3
-RUN if [ "${PHP_VERSION}" = "7.3" ]; \
-    then curl -fSL --retry 5 --retry-delay 5 --retry-all-errors https://files.magerun.net/n98-magerun2-6.1.1.phar -o /usr/local/bin/n98-magerun2; fi
-
-# If PHP < 7.3
-RUN if [ "$(printf "7.3\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{print $1"."$2}')" != "7.3" ]; \
-    then curl -fSL --retry 5 --retry-delay 5 --retry-all-errors https://files.magerun.net/n98-magerun2-4.7.0.phar -o /usr/local/bin/n98-magerun2; fi
+      -o /usr/local/bin/n98-magerun2 "https://files.magerun.net/${magerun_phar}"; \
+    php /usr/local/bin/n98-magerun2 --version; \
+    php /usr/local/bin/n98-magerun2 list > /dev/null
 
 RUN chmod +rx /usr/local/bin/n98-magerun2 \
     && ln -s /usr/local/bin/n98-magerun2 /usr/local/bin/n98-magerun \
