@@ -13,6 +13,8 @@ on:
       - .trigger
       - varnish/**
       - .github/workflows/docker-image-varnish.yml
+    branches:
+      - master
 
 jobs:
   # Discover which versions to build: the pinned list is always built and any
@@ -22,6 +24,7 @@ jobs:
   discover:
     name: Discover Varnish versions
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
     outputs:
       matrix: ${{ steps.discover.outputs.matrix }}
       build: ${{ steps.discover.outputs.build }}
@@ -110,6 +113,7 @@ jobs:
   varnish-lts:
     name: Varnish LTS
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
 
     strategy:
       fail-fast: false

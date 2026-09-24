@@ -4,7 +4,8 @@ A review of the build pipeline that produces the `php-fpm` image family
 (`.github/workflows/docker-image-php-fpm.yml`, `.github/workflows/php-matrix/`, `php-fpm/**`),
 prompted by an arm64 image that could not be pulled. The investigation found that the pipeline had
 been failing on every scheduled run for roughly three months, so nothing in the family had been
-published in that time.
+published in that time. A follow-up on 2026-09-24 ([H6](#h6)–[H9](#h9), [M8](#m8)) also covers the
+other image workflows that were failing at that point.
 
 Findings below are grouped by severity. Every claim carries a `file:line`. Claims that could not be
 verified in this repository are labelled *unverified* in the sentence that makes them.
@@ -15,6 +16,13 @@ verified in this repository are labelled *unverified* in the sentence that makes
 > skipped every layer job in the chain. Fixes for H2, H5 and [M6](#m6) are applied in the working
 > tree and not yet committed, along with [M1](#m1) — which is what makes a targeted, minutes-long
 > rebuild of a single PHP/Node pair possible instead of a multi-hour full run.
+
+> **Status (2026-09-24).** Six workflows were failing on the daily schedule: PHP-FPM, Varnish,
+> DNSMasq, Magepack, Elasticsearch and OpenSearch. The causes are [H6](#h6)–[H9](#h9) and [M8](#m8).
+> Fixes are on branch `bugfix/ci-build-failures`, and each one was verified with a local arm64 build.
+> In CI, the branch builds of DNSMasq, Varnish, Magepack (both native architectures) and OpenSearch
+> passed before CI was restricted to `master`. The php-fpm fixes are verified locally only, because
+> its build steps never ran off `master`.
 
 ## Severity
 
@@ -120,6 +128,11 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
   `PHP_VERSIONS_OS_RELEASE` and `NODE_VERSIONS_OS_RELEASE` version by version, keeping the older PHP
   versions on bullseye only for as long as upstream still publishes them there. Bullseye-only PHP
   versions that outlive the suite should move to `PHP_DENY_VERSIONS` rather than be left to fail.
+- *Update 2026-09-24:* the predicted break came from a different direction. The `bullseye` suite itself
+  is still served by `deb.debian.org`, but its security pool was purged, as described in [H6](#h6).
+  H6's snapshot pin only buys time. This migration is still the real fix for PHP 8.1 and later. PHP
+  7.3, 7.4 and 8.0 have no upstream base image newer than bullseye (verified with
+  `docker manifest inspect`), so they can only stay on the snapshot or move to `PHP_DENY_VERSIONS`.
 
 <a id="h4"></a>
 **H4. A daily scheduled build failed for 96 consecutive days without notifying anyone** — `.github/workflows/docker-image-php-fpm.yml:13-14`
@@ -166,6 +179,68 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
   individually, `fail-fast: false` keeps the rest going, and the `EXPECTED_ARCHES=2` guard in the
   merge jobs skips exactly those tags — which is the behaviour the merge jobs were already written to
   expect.
+
+<a id="h6"></a>
+**H6. Bullseye's security pool was purged, so any apt install of a security-updated package fails with a 404** — `php-fpm/Dockerfile:8`, `dnsmasq/Dockerfile:3`
+
+- *What:* Debian 11 LTS ended on 2026-08-31. Within days, `deb.debian.org` deleted every `+deb11uN`
+  file from `debian-security/pool/updates/`. The `dists/bullseye-security` index was left frozen: it is
+  dated 2026-08-31 21:13 UTC and still lists those files. So apt resolves a package such as
+  `libssl1.1 1.1.1w-0+deb11u8` from the index and gets a 404 when it downloads it. On
+  snapshot.debian.org, the last snapshot with the pool still intact is `20260901T000000Z`. The same
+  file returns 404 in the snapshots from 20260905 onwards. `archive.debian.org` has no
+  `bullseye-security` suite yet: its `InRelease` returns 404.
+- *Why it matters:* `install-php-extensions amqp` (`php-fpm/Dockerfile:38`) needs `librabbitmq-dev` and
+  `libssl-dev`. Since at least 2026-09-18 it has failed every PHP base build on both architectures, so
+  no `php-fpm` base image has been published since then. In DNSMasq, `apt-get install git` upgrades git
+  to `+deb11u5` and fails the same way. Images that are already published should hit the same 404 at
+  container start when `ADD_PHP_EXT` names an extension that needs a security-updated library. This
+  one is *inferred, not reproduced*: the entrypoint uses the same `install-php-extensions` mechanism.
+- *Suggested fix:* **Applied** on the branch. `php-fpm/context/apt-snapshot-bullseye-security` changes
+  the `bullseye-security` source to point at that snapshot, with `check-valid-until=no`, and raises
+  apt's retry count. It runs in the base image before any apt call. It also runs in the node and
+  magento2 layers, because those build on the previously published tag ([M7](#m7)), which predates the
+  fix. On any other Debian release the script changes nothing. DNSMasq moves to Debian trixie. Verified
+  locally: the PHP 7.4 and 8.4 base images build for arm64, `amqp` loads, and `apt-get install git`
+  succeeds in the built image. Limits: this is a stopgap. The snapshot is frozen at the final LTS state
+  (there are no further public security fixes anyway), and the `bullseye` main suite will eventually
+  move to `archive.debian.org` as well. The lasting fix is [H3](#h3).
+
+<a id="h7"></a>
+**H7. `node:26` images no longer bundle Yarn, failing every Node 26 combination** — `php-fpm/node/Dockerfile:13`
+
+- *What:* `node:26-*` images have an empty `/opt`, no `yarn` and no `corepack` (verified in
+  `node:26-bullseye`). The node stage ran `mv /opt/yarn* /opt/yarn`, which exits 1 when nothing matches
+  the glob. Node 26 is picked up by discovery, so the node layer and every layer built on it (xdebug,
+  magento1, magento2, magento2-xdebug, wordpress) failed for every PHP version.
+- *Why it matters:* no `*-node26` tag in the family has ever been published.
+- *Suggested fix:* **Applied** on the branch. If a bundled `/opt/yarn*` exists, the stage keeps it;
+  otherwise it installs Yarn 1 (`YARN_VERSION=1.22.22`) from the npm registry into the same
+  `/opt/yarn` layout, with a retry loop. Verified locally: the `8.4` + Node 26 image reports
+  `yarn 1.22.22`, and Node 22 still uses its bundled copy.
+
+<a id="h8"></a>
+**H8. Varnish 9.x publishes no Alpine tags, so `apk` runs on a Debian base** — `varnish/Dockerfile:14`, `.github/workflows/docker-image-varnish.yml:94`
+
+- *What:* "Determine Version" picks the newest tag matching `X.Y[.Z][-alpine]`. Varnish 9.0 and 9.1
+  have Debian (trixie) tags only, so the build resolved a Debian image and `apk add` exited 127.
+- *Why it matters:* both 9.x versions fail on every run, and neither has ever been published.
+- *Suggested fix:* **Applied** on the branch. `envsubst` is now installed with `apk` when it exists and
+  with `apt-get` (`gettext-base`) otherwise. Verified locally: `9.1.0` builds and the rendered VCL
+  compiles (`varnishd -C`), and `7.7.3-alpine` still builds with `envsubst` present.
+
+<a id="h9"></a>
+**H9. Magepack's QEMU-emulated arm64 build crashes Node with `Illegal instruction`** — `.github/workflows/docker-image-magepack.yml`
+
+- *What:* the workflow built both platforms in one job, emulating arm64 with QEMU. The arm64
+  `npm install -g magepack` died with `Illegal instruction (core dumped)` (exit 132) in 6 of the last 7
+  scheduled runs. amd64 passed every time.
+- *Why it matters:* whenever the arm64 build fails, that version's multi-arch tag is not refreshed.
+- *Suggested fix:* **Applied** on the branch. Each architecture now builds on its own native runner
+  (`ubuntu-24.04` and `ubuntu-24.04-arm`) and pushes by digest. A merge job then publishes only the
+  versions that have both digests, the same pattern php-fpm uses. Verified: the Dockerfile builds
+  natively for arm64 locally, and the branch run built all 18 per-arch jobs in CI. The merge job
+  runs on `master` only, so it is *unverified* until the first `master` run.
 
 ### Medium
 
@@ -302,6 +377,19 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
   builds strictly top-down within one run. Alternatively, pass the parent by digest rather than by
   tag, which removes the dependency on a manifest existing at all.
 
+<a id="m8"></a>
+**M8. Elasticsearch and OpenSearch plugin installs had no retry** — `elasticsearch/Dockerfile:5`, `opensearch/Dockerfile:4`
+
+- *What:* each plugin was downloaded once. Elasticsearch 8.15 failed on 2026-09-23 and 2026-09-24 with
+  a SHA-512 mismatch on `analysis-icu`, which points to a truncated download: the same file downloaded
+  locally matches its published checksum. OpenSearch 3.6 failed with
+  `java.net.SocketException: Connection reset` partway through the download.
+- *Why it matters:* one network blip fails that version for the day. That breaks this repository's
+  own rule that in-Dockerfile downloads retry.
+- *Suggested fix:* **Applied** on the branch. Each plugin install is retried up to 5 times. A failed
+  install rolls itself back, so each retry starts clean. Verified locally: `8.15.5` and `3.6.0` build,
+  and both images list `analysis-icu` and `analysis-phonetic`.
+
 ### Low
 
 <a id="l1"></a>
@@ -370,4 +458,6 @@ Recorded so the next reader does not re-investigate them.
 | Does the `merge` job group digests correctly when base and node artefacts share one directory? | **Yes.** Base digests are named `<sha>-<php>` and node digests `<sha>-<php>-node<n>` (`.github/workflows/docker-image-php-fpm.yml:236,299`), both downloaded under `pattern: digests-*` (line 648). `cut -d- -f 2-` recovers the full version because the sha is dash-free, and the `*-"${version}"` glob does not cross between the two forms. |
 | Is the `EXPECTED_ARCHES=2` skip logic sound? | **Yes.** A version with fewer than two arch digests is skipped with a warning and keeps its previous image rather than being republished as a single-arch manifest, and the loop continues to the remaining versions. This is what prevented the outage from *removing* existing tags — the images went stale rather than disappearing. |
 | Do the other pinned PHP base tags exist upstream? | **Yes**, except 8.5 ([H2](#h2)). `php:7.3-fpm-bullseye`, `php:8.3-fpm-bullseye` and `php:8.4-fpm-bullseye` all resolve, as do `node:19-bullseye` and `node:22-bullseye`. |
+| Is the whole `bullseye` suite gone from `deb.debian.org`? (2026-09-24) | **No.** `apt-get update` against `bullseye`, `bullseye-updates` and `bullseye-security` succeeds. Only the security *pool* files are gone ([H6](#h6)). |
+| Is the published Elasticsearch `analysis-icu-8.15.5.zip` itself corrupt? | **No.** A fresh download matches its `.sha512`. The CI failure was a truncated transfer ([M8](#m8)). |
 | Was the `mailpit` sendmail builder stage or the `install-php-extensions` download the cause? | **No.** Both complete successfully in a local reproduction of the failing build; the base image reaches step 42 of 45 before failing at [H1](#h1). |

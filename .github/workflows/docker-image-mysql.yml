@@ -13,6 +13,8 @@ on:
       - .trigger
       - mysql/**
       - .github/workflows/docker-image-mysql.yml
+    branches:
+      - master
 
 jobs:
   # Discover which modern versions to build: the pinned list is always built and
@@ -22,6 +24,7 @@ jobs:
   discover:
     name: Discover MySQL versions
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
     outputs:
       matrix: ${{ steps.discover.outputs.matrix }}
       build: ${{ steps.discover.outputs.build }}
@@ -110,6 +113,7 @@ jobs:
   mysql-legacy:
     name: MySQL Legacy ${{ matrix.version }}
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
 
     strategy:
       fail-fast: false

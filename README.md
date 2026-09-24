@@ -55,12 +55,11 @@ service workflow triggers on:
   `versions` input to build a specific set on demand),
 - a daily **`schedule`** cron (`0 6 * * *`) — so images rebuild against fresh
   upstream bases,
-- **`push`** touching that service's directory or its workflow file.
+- **`push`** to `master` touching that service's directory or its workflow file.
 
-Images are only **pushed** when running on `master` (`github.ref == 'refs/heads/master'`).
-On other branches the service workflows still **build** the image to validate the
-change and skip only the push. (The lone exception is `docker-image-php-fpm.yml`,
-whose matrix is large enough that it builds only on `master`.)
+CI runs on **`master` only**: push triggers are limited to `master`, there is no
+pull-request trigger, and a manual run started from another branch skips all jobs.
+Feature branches and pull requests therefore start no builds.
 
 Every workflow has the same two-stage shape:
 
@@ -102,9 +101,12 @@ that watches it, without having to touch a `Dockerfile`.
 
 ### Validating a change without merging
 
-- Push to a non-`master` branch and watch the workflow build (it won't push), or
-- Run a workflow locally with [`act`](https://github.com/nektos/act); the workflows
-  detect `env.ACT` and skip registry logins and pushes.
+- Build the image locally with `docker buildx build`, passing the same build args the
+  workflow uses, or
+- Run a workflow locally with [`act`](https://github.com/nektos/act). The jobs only run
+  for the `master` ref, so on a feature branch pass an event file containing
+  `"ref": "refs/heads/master"` (`act -e event.json`). Registry logins, pushes and digest
+  merges are skipped under `act`.
 
 ## Adding or changing a version
 

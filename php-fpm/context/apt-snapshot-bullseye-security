@@ -1,0 +1,21 @@
+#!/bin/sh
+# Debian 11 (bullseye) LTS ended on 2026-08-31 and deb.debian.org purged every package from the
+# bullseye-security pool within days, while its frozen index still lists them. Any apt install that
+# resolves to a security-updated package (libssl, git, librabbitmq, ...) then fails with a 404.
+#
+# This points bullseye-security at the last intact snapshot, so the versions the index advertises —
+# and that the upstream base images already have installed — stay downloadable. The rewrite is a
+# no-op on any other Debian release. apt retries are raised because snapshot.debian.org throttles
+# bursts of requests.
+set -eu
+
+SNAPSHOT="${DEBIAN_SECURITY_SNAPSHOT:-20260901T000000Z}"
+
+for sources in /etc/apt/sources.list /etc/apt/sources.list.d/*.list; do
+    [ -f "$sources" ] || continue
+    sed -i -E \
+        "s#^deb https?://(deb|security)\.debian\.org/debian-security/? bullseye-security#deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/${SNAPSHOT} bullseye-security#" \
+        "$sources"
+done
+
+echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries

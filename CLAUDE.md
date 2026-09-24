@@ -28,10 +28,14 @@ by `.github/workflows/docker-image-*.yml`. Each workflow triggers on:
 
 - `workflow_dispatch` (manual),
 - a daily `schedule` cron (`0 6 * * *`), so images rebuild against upstream bases,
-- `push` touching that service's directory or its workflow file.
+- `push` to `master` touching that service's directory or its workflow file.
 
-Images are only pushed when `github.ref == 'refs/heads/master'` (and not under
-`act`). On other branches/PRs the workflow runs the build but skips the push.
+**CI runs on `master` only.** Push triggers are filtered to `branches: [master]`, there
+is no `pull_request` trigger, and each workflow's entry job(s) carry
+`if: github.ref == 'refs/heads/master'`, so a manual dispatch from another branch does
+nothing (every other job `needs:` an entry job and is skipped with it). Keep all three
+when adding or editing a workflow. Registry logins and pushes are additionally skipped
+under `act`; `env` is not available in a job-level `if:`, so `!env.ACT` goes on steps.
 
 Every workflow has a two-stage shape: a **`discover`** job decides which versions to
 build, then a **build matrix** builds each version as an independent job. `fail-fast:
@@ -52,9 +56,11 @@ false` is set everywhere, so one version failing never stops the others.
 workflows. Editing it (e.g. changing the UUID) is the way to force a rebuild of
 all images that watch it without touching any Dockerfile.
 
-To validate a change without merging, push to a non-master branch and watch the
-workflow build (it won't push), or run the relevant workflow with `act` (it
-detects `env.ACT` and skips registry logins/pushes).
+To validate a change before merging, build the image locally (`docker buildx build`
+with the same build args the workflow passes), or run the workflow with `act`. Because
+the entry jobs are gated on `master`, `act` on a feature branch skips everything unless
+you pass an event with `"ref": "refs/heads/master"` (`act -e event.json`); logins,
+pushes and digest merges are skipped under `act` either way.
 
 ## The php-fpm image graph (most important architecture)
 

@@ -12,6 +12,10 @@ ARG PHP_VERSION
 # ---------------------------------------------------------------------------
 FROM ${ENV_SOURCE_IMAGE}:${PHP_VERSION} AS mydumper-builder
 USER root
+# The source image may predate the bullseye-security fix in the base layer (layers build on the
+# previously published tag), so apply it here too before touching apt.
+COPY apt-snapshot-bullseye-security /usr/local/bin/apt-snapshot-bullseye-security
+RUN apt-snapshot-bullseye-security
 ARG MYDUMPER_VERSION=1.0.1-3
 RUN set -eux; \
     apt-get update -y; \
@@ -30,6 +34,11 @@ ARG ENV_SOURCE_IMAGE
 ARG PHP_VERSION
 FROM ${ENV_SOURCE_IMAGE}:${PHP_VERSION}
 USER root
+
+# The source image may predate the bullseye-security fix in the base layer (layers build on the
+# previously published tag), so apply it here too before touching apt.
+COPY apt-snapshot-bullseye-security /usr/local/bin/apt-snapshot-bullseye-security
+RUN apt-snapshot-bullseye-security
 
 # Install the mydumper/myloader binaries built above plus their runtime libs.
 # `roll mydumper` / `roll myloader` (Magento 2 only) execute these inside the

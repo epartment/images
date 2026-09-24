@@ -26,6 +26,7 @@ jobs:
   mirror:
     name: Mirror upstream base images to GHCR
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
     permissions:
       contents: read
       packages: write
