@@ -13,6 +13,8 @@ on:
       - .trigger
       - elasticsearch/**
       - .github/workflows/docker-image-elasticsearch.yml
+    branches:
+      - master
 
 jobs:
   # Discover which versions to build: the pinned list is always built and any
@@ -22,6 +24,7 @@ jobs:
   discover:
     name: Discover Elasticsearch versions
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
     outputs:
       matrix: ${{ steps.discover.outputs.matrix }}
       build: ${{ steps.discover.outputs.build }}

@@ -12,7 +12,6 @@ on:
         type: string
   schedule:
     - cron: "0 6 * * *"   # 6 AM daily
-  pull_request:
   push:
     paths:
       - .trigger
@@ -42,6 +41,7 @@ jobs:
   discover:
     name: Discover PHP & Node versions
     runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/master' }}
     outputs:
       php_versions: ${{ steps.discover.outputs.php_versions }}
       node_versions: ${{ steps.discover.outputs.node_versions }}
@@ -647,6 +647,7 @@ jobs:
           path: ${{ runner.temp }}/digests
           pattern: digests-*
           merge-multiple: true
+        if: ${{ !env.ACT }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -661,6 +662,7 @@ jobs:
 
       - name: Create and push manifests per PHP version
         working-directory: ${{ runner.temp }}/digests
+        if: ${{ !env.ACT }}
         run: |
           set -uo pipefail
           REGISTRY_IMAGE="${{ env.REGISTRY_IMAGE }}"
@@ -734,6 +736,7 @@ jobs:
           path: ${{ runner.temp }}/xdebug-digests
           pattern: xdebug-digests-*
           merge-multiple: true
+        if: ${{ !env.ACT }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -748,6 +751,7 @@ jobs:
 
       - name: Create and push manifests per PHP version
         working-directory: ${{ runner.temp }}/xdebug-digests
+        if: ${{ !env.ACT }}
         run: |
           set -uo pipefail
           REGISTRY_IMAGE="${{ env.REGISTRY_XDEBUG }}"
@@ -821,6 +825,7 @@ jobs:
           path: ${{ runner.temp }}/magento1-digests
           pattern: magento1-digests-*
           merge-multiple: true
+        if: ${{ !env.ACT }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -835,6 +840,7 @@ jobs:
 
       - name: Create and push manifests per PHP version
         working-directory: ${{ runner.temp }}/magento1-digests
+        if: ${{ !env.ACT }}
         run: |
           set -uo pipefail
           REGISTRY_IMAGE="${{ env.REGISTRY_MAGENTO1 }}"
@@ -908,6 +914,7 @@ jobs:
           path: ${{ runner.temp }}/magento2-digests
           pattern: magento2-digests-*
           merge-multiple: true
+        if: ${{ !env.ACT }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -922,6 +929,7 @@ jobs:
 
       - name: Create and push manifests per PHP version
         working-directory: ${{ runner.temp }}/magento2-digests
+        if: ${{ !env.ACT }}
         run: |
           set -uo pipefail
           REGISTRY_IMAGE="${{ env.REGISTRY_MAGENTO2 }}"
@@ -995,6 +1003,7 @@ jobs:
           path: ${{ runner.temp }}/magento2-debug-digests
           pattern: magento2-debug-digests-*
           merge-multiple: true
+        if: ${{ !env.ACT }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -1009,6 +1018,7 @@ jobs:
 
       - name: Create and push manifests per PHP version
         working-directory: ${{ runner.temp }}/magento2-debug-digests
+        if: ${{ !env.ACT }}
         run: |
           set -uo pipefail
           REGISTRY_IMAGE="${{ env.REGISTRY_MAGENTO2_DEBUG }}"
@@ -1082,6 +1092,7 @@ jobs:
           path: ${{ runner.temp }}/wordpress-digests
           pattern: wordpress-digests-*
           merge-multiple: true
+        if: ${{ !env.ACT }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -1096,6 +1107,7 @@ jobs:
 
       - name: Create and push manifests per PHP version
         working-directory: ${{ runner.temp }}/wordpress-digests
+        if: ${{ !env.ACT }}
         run: |
           set -uo pipefail
           REGISTRY_IMAGE="${{ env.REGISTRY_WORDPRESS }}"

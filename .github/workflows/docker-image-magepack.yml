@@ -7,6 +7,8 @@ on:
     paths:
       - magepack/**
       - .github/workflows/*magepack*
+    branches:
+      - master
 
 env:
   REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/roll/magepack
@@ -17,6 +19,7 @@ jobs:
   magepack:
     name: Magepack ${{ matrix.version }} (${{ matrix.arch.name }})
     runs-on: ${{ matrix.arch.runs_on }}
+    if: github.ref == 'refs/heads/master'
     permissions:
       contents: read
       packages: write
@@ -97,6 +100,7 @@ jobs:
           path: ${{ runner.temp }}/digests
           pattern: digests-magepack-*
           merge-multiple: true
+        if: ${{ !env.ACT }}
 
       - uses: docker/setup-buildx-action@v3
 
@@ -110,6 +114,7 @@ jobs:
 
       - name: Create and push manifests per version
         working-directory: ${{ runner.temp }}/digests
+        if: ${{ !env.ACT }}
         run: |
           set -uo pipefail
           REGISTRY_IMAGE="${{ env.REGISTRY_IMAGE }}"

@@ -8,11 +8,14 @@ on:
       - .trigger
       - dnsmasq/**
       - .github/workflows/*dnsmasq*
+    branches:
+      - master
 
 jobs:
   dnsmasq:
     name: DNSMasq
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
 
     steps:
       - uses: actions/checkout@v4
