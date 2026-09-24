@@ -8,10 +8,18 @@ on:
       - magepack/**
       - .github/workflows/*magepack*
 
+env:
+  REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/roll/magepack
+
 jobs:
+  # Each architecture builds on its own native runner. Emulating arm64 with QEMU made
+  # `npm install` in the arm64 build die with "Illegal instruction" (exit 132) on most runs.
   magepack:
-    name: Magepack
-    runs-on: ubuntu-latest
+    name: Magepack ${{ matrix.version }} (${{ matrix.arch.name }})
+    runs-on: ${{ matrix.arch.runs_on }}
+    permissions:
+      contents: read
+      packages: write
 
     strategy:
       fail-fast: false
@@ -26,10 +34,70 @@ jobs:
           - "2.9"
           - "2.10"
           - "2.11"
+        arch:
+          - name: amd64
+            runs_on: ubuntu-24.04
+            platform: linux/amd64
+          - name: arm64
+            runs_on: ubuntu-24.04-arm
+            platform: linux/arm64
 
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to Github Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+
+      - name: Build and push by digest (${{ matrix.arch.name }})
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: magepack
+          platforms: ${{ matrix.arch.platform }}
+          build-args: MAGEPACK_VERSION=${{ matrix.version }}
+          tags: ${{ env.REGISTRY_IMAGE }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=${{ github.ref == 'refs/heads/master' && !env.ACT }}
+
+      - name: Export digest
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        run: |
+          mkdir -p ${{ runner.temp }}/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}-${{ matrix.version }}"
+
+      - name: Upload digest
+        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-magepack-${{ matrix.version }}-${{ matrix.arch.name }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    needs: [ magepack ]
+    # Run even when some build-matrix entries failed, so the versions that did build on
+    # both architectures are still published.
+    if: ${{ !cancelled() && github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-magepack-*
+          merge-multiple: true
+
       - uses: docker/setup-buildx-action@v3
 
       - name: Login to Github Container Registry
@@ -40,10 +108,51 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
         if: ${{ !env.ACT }}
 
-      - uses: docker/build-push-action@v6
-        with:
-          context: magepack
-          platforms: linux/amd64,linux/arm64
-          build-args: MAGEPACK_VERSION=${{ matrix.version }}
-          push: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-          tags: ghcr.io/${{ github.repository_owner }}/roll/magepack:${{ matrix.version }}
+      - name: Create and push manifests per version
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          set -uo pipefail
+          REGISTRY_IMAGE="${{ env.REGISTRY_IMAGE }}"
+          # A version is only published with both architecture digests; an incomplete one keeps
+          # its previous image until the next run instead of becoming a single-arch manifest.
+          EXPECTED_ARCHES=2
+
+          shopt -s nullglob
+          if [ -z "$(ls -A 2>/dev/null)" ]; then
+            echo "::error::No digest artifacts found for ${REGISTRY_IMAGE} — nothing to merge."
+            exit 1
+          fi
+
+          # Digest files are named "<sha256-hex>-<version>"; the sha is dash-free.
+          version_names=$(ls | cut -d- -f 2- | sort -u)
+          published=0
+          skipped=0
+          for version in $version_names; do
+            references=""
+            count=0
+            for file in *-"${version}"; do
+              references="$references $REGISTRY_IMAGE@sha256:${file%-${version}}"
+              count=$((count + 1))
+            done
+
+            if [ "$count" -lt "$EXPECTED_ARCHES" ]; then
+              echo "::warning::Skipping ${REGISTRY_IMAGE}:${version} — only ${count}/${EXPECTED_ARCHES} arch digest(s) present; keeping previous image."
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            echo "Creating manifest for ${version} (${count} arches):${references}"
+            # shellcheck disable=SC2086
+            if docker buildx imagetools create -t "$REGISTRY_IMAGE:${version}" ${references}; then
+              published=$((published + 1))
+            else
+              echo "::warning::Failed to publish ${REGISTRY_IMAGE}:${version}; continuing with remaining versions."
+              skipped=$((skipped + 1))
+            fi
+          done
+
+          echo "Published ${published} tag(s), skipped ${skipped}, for ${REGISTRY_IMAGE}."
+          if [ "$published" -eq 0 ]; then
+            echo "::error::No ${REGISTRY_IMAGE} tags could be published."
+            exit 1
+          fi

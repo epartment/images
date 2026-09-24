@@ -10,10 +10,33 @@ RUN set -eux; \
       n=$((n + 1)); [ "$n" -ge 5 ] && { echo "npm install failed after $n attempts"; exit 1; }; \
       echo "npm install failed, retry $n..."; sleep 10; \
     done
-RUN mv /opt/yarn* /opt/yarn
+# node:26 and later no longer bundle Yarn in /opt (nor corepack). Install Yarn 1 from the npm
+# registry into the same /opt/yarn layout older images provide, so the symlinks below hold for
+# every Node version.
+ARG YARN_VERSION=1.22.22
+RUN set -eux; \
+    set -- /opt/yarn*; \
+    if [ -e "$1" ]; then \
+      mv "$1" /opt/yarn; \
+    else \
+      cd /tmp; \
+      n=0; until npm pack "yarn@${YARN_VERSION}"; do \
+        n=$((n + 1)); [ "$n" -ge 5 ] && { echo "yarn download failed after $n attempts"; exit 1; }; \
+        echo "yarn download failed, retry $n..."; sleep 10; \
+      done; \
+      mkdir -p /opt/yarn; \
+      tar -xzf "yarn-${YARN_VERSION}.tgz" -C /opt/yarn --strip-components=1; \
+      rm "yarn-${YARN_VERSION}.tgz"; \
+    fi; \
+    /opt/yarn/bin/yarn --version
 
 FROM ${ENV_SOURCE_IMAGE}:${PHP_VERSION}
 USER root
+
+# The source image may predate the bullseye-security fix in the base layer (layers build on the
+# previously published tag), so apply it here too before touching apt.
+COPY apt-snapshot-bullseye-security /usr/local/bin/apt-snapshot-bullseye-security
+RUN apt-snapshot-bullseye-security
 
 # Install libraries and libc-bin for ldd command
 RUN apt-get update \

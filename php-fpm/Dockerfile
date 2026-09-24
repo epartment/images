@@ -16,6 +16,11 @@ ENV GROUP_ID        20
 ENV OSTYPE          darwin220
 ENV ADD_PHP_EXT     ""
 
+# Keep bullseye-security installable after its pool was purged (see the script header).
+# Runs before any apt use; every layer built on this image inherits the rewritten sources.
+COPY apt-snapshot-bullseye-security /usr/local/bin/apt-snapshot-bullseye-security
+RUN apt-snapshot-bullseye-security
+
 # PHP Extension Installer.
 # Fetched with curl (not ADD) so a transient network blip retries instead of
 # failing the whole build. curl ships in the official php base image.

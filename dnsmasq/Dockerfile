@@ -1,11 +1,11 @@
-FROM golang:bullseye AS builder
-RUN apt-get update  \
-  && apt-get install git \
-  && mkdir -p /root/gocode \
+# Debian trixie: bullseye's security pool was purged when its LTS ended (2026-08-31), which broke
+# every apt install here. The golang image already ships git, so no apt step is needed to build.
+FROM golang:trixie AS builder
+RUN mkdir -p /root/gocode \
   && export GOPATH=/root/gocode \
   && go install github.com/jpillora/webproc@v0.4.0
 
-FROM debian:bullseye-slim
+FROM debian:trixie-slim
 LABEL maintainer="support@epartment.nl"
 # webproc release settings
 COPY --from=builder /root/gocode/bin/webproc /usr/local/bin
