@@ -29,6 +29,13 @@ summarised as the net result.
   now builds on a native runner, followed by a digest merge that publishes only versions with both
   architectures.
 
+### Changed
+
+- **CI (all workflows):** runs on `master` only. Push triggers are limited to `master`, the php-fpm
+  `pull_request` trigger is removed, and entry jobs are gated on the `master` ref, so manual runs
+  from other branches do nothing. Merge-job steps that need digest artifacts are skipped under
+  `act`.
+
 ## 2026-09-17
 
 ### Fixed

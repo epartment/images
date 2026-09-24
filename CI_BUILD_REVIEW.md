@@ -20,8 +20,9 @@ verified in this repository are labelled *unverified* in the sentence that makes
 > **Status (2026-09-24).** Six workflows were failing on the daily schedule: PHP-FPM, Varnish,
 > DNSMasq, Magepack, Elasticsearch and OpenSearch. The causes are [H6](#h6)–[H9](#h9) and [M8](#m8).
 > Fixes are on branch `bugfix/ci-build-failures`, and each one was verified with a local arm64 build.
-> None is verified in CI yet. Note that a branch push cannot verify the php-fpm fixes, because the
-> php-fpm build steps only run on `master`.
+> In CI, the branch builds of DNSMasq, Varnish, Magepack (both native architectures) and OpenSearch
+> passed before CI was restricted to `master`. The php-fpm fixes are verified locally only, because
+> its build steps never ran off `master`.
 
 ## Severity
 
@@ -237,9 +238,9 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
 - *Why it matters:* whenever the arm64 build fails, that version's multi-arch tag is not refreshed.
 - *Suggested fix:* **Applied** on the branch. Each architecture now builds on its own native runner
   (`ubuntu-24.04` and `ubuntu-24.04-arm`) and pushes by digest. A merge job then publishes only the
-  versions that have both digests, the same pattern php-fpm uses. Builds now also run, without
-  pushing, on non-`master` branches. Verified locally: the Dockerfile builds natively for arm64. The
-  workflow itself is *unverified* until it runs in CI.
+  versions that have both digests, the same pattern php-fpm uses. Verified: the Dockerfile builds
+  natively for arm64 locally, and the branch run built all 18 per-arch jobs in CI. The merge job
+  runs on `master` only, so it is *unverified* until the first `master` run.
 
 ### Medium
 
