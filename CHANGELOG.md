@@ -8,7 +8,17 @@ reached `master`, newest first. Categories follow [Keep a Changelog](https://kee
 **Added**, **Changed**, **Fixed**, **Removed**. Several trial-and-error commits on the same day are
 summarised as the net result.
 
-## 2026-09-24
+## Unreleased
+
+### Fixed
+
+- **php-fpm magento2 (PHP 7.3–8.1):** every build of these images failed at the magerun smoke
+  test, so none of them had been published since 2026-09-03 and the published tags still carried
+  an n98-magerun2 that cannot start (`roll setup-autologin` reports "n98-magerun2 is not
+  installed"). The per-PHP phar selection matched on `${PHP_VERSION}`, which inside the stage is
+  the base image's full version (`7.4.33`), so every version fell through to the latest phar.
+  The version is now read from the PHP binary, and PHP 8.1 is pinned to magerun 9.5.1 because the
+  10.x line requires PHP 8.2.
 
 ### Fixed
 

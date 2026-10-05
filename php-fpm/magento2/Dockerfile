@@ -56,17 +56,23 @@ RUN set -eux; \
 
 # Magerun
 # The unversioned phar is whatever n98 released last, and its Composer runtime requirement rises
-# over time: the current 9.x line needs PHP >= 8.1, so PHP 7.4 and 8.0 were shipping a magerun
-# that aborts on every invocation. Each PHP version therefore names the newest phar verified to
-# run on it, and the smoke test below turns a future recurrence into a failed image build rather
-# than a broken image. Downloaded with curl --retry (not ADD) so a transient files.magerun.net
-# blip retries instead of failing the build.
+# over time: the 9.x line needs PHP >= 8.1 and the 10.x line PHP >= 8.2, so older PHP versions
+# were shipping a magerun that aborts on every invocation. Each PHP version therefore names the
+# newest phar verified to run on it, and the smoke test below turns a future recurrence into a
+# failed image build rather than a broken image. Downloaded with curl --retry (not ADD) so a
+# transient files.magerun.net blip retries instead of failing the build.
+# The version is read from the PHP binary, not from ${PHP_VERSION}: in this stage that name
+# resolves to the base php image's ENV (the full version, e.g. 7.4.33, since ENV overrides an ARG
+# of the same name), and the build-arg itself carries a node suffix (8.1-node20), so neither
+# form would ever match a major.minor pattern.
 RUN set -eux; \
-    case "${PHP_VERSION}" in \
+    php_minor_version="$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION;')"; \
+    case "${php_minor_version}" in \
         7.0|7.1|7.2) magerun_phar="n98-magerun2-4.7.0.phar" ;; \
         7.3)         magerun_phar="n98-magerun2-6.1.1.phar" ;; \
         7.4)         magerun_phar="n98-magerun2-7.5.0.phar" ;; \
         8.0)         magerun_phar="n98-magerun2-8.1.1.phar" ;; \
+        8.1)         magerun_phar="n98-magerun2-9.5.1.phar" ;; \
         *)           magerun_phar="n98-magerun2.phar" ;; \
     esac; \
     curl -fSL --retry 5 --retry-delay 5 --retry-all-errors \
