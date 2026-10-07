@@ -18,6 +18,7 @@ on:
       - php-fpm/**
       - .github/workflows/*php-fpm*
       - .github/workflows/php-matrix/**
+      - .github/scripts/merge-per-arch-tags.sh
     branches:
       - master
 
@@ -28,6 +29,19 @@ env:
   REGISTRY_MAGENTO2: ghcr.io/epartment/roll/php-fpm-magento2
   REGISTRY_MAGENTO2_DEBUG: ghcr.io/epartment/roll/php-fpm-magento2-debug
   REGISTRY_WORDPRESS: ghcr.io/epartment/roll/php-fpm-wordpress
+  # Every build leg pushes <image>:<version>-arch-<suffix> with this label set to
+  # the run id; the merge jobs publish a version only when all its arch tags carry
+  # this run's id (see .github/scripts/merge-per-arch-tags.sh).
+  PER_ARCH_RUN_LABEL: org.epartment.roll.ci-run-id
+
+# Runs share the per-arch hand-off tags, so two overlapping runs could leave x86
+# and arm64 labelled with different run ids and both merges would skip the version.
+# Queue runs instead of overlapping them; never cancel a build in progress. The
+# group includes the ref so a no-op run from another branch cannot displace a
+# queued master run (GitHub keeps one pending run per group; a newer one replaces it).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -211,7 +225,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push by digest (${{ matrix.arch.cache_arch }})
+      - name: Build and push per-arch tag (${{ matrix.arch.cache_arch }})
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -222,28 +236,12 @@ jobs:
             PHP_VERSION=${{ matrix.php_version }}
             OS_RELEASE=${{ matrix.php_os_release }}
             ENV_SOURCE_IMAGE=${{ needs.discover.outputs.registry_base != '' && format('{0}/php', needs.discover.outputs.registry_base) || 'php' }}
-          tags: ${{ env.REGISTRY_IMAGE }}
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          tags: ${{ env.REGISTRY_IMAGE }}:${{ matrix.php_version }}-arch-${{ matrix.arch.cache_suffix }}
+          labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
+          push: true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-buildcache,mode=max
         if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-
-      - name: Export digest
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        run: |
-          mkdir -p ${{ runner.temp }}/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/digests/${digest#sha256:}-${{ matrix.php_version }}"
-
-      - name: Upload digest
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: digests-${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}
-          path: ${{ runner.temp }}/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
 
   php-node:
     name: PHP-FPM ${{ matrix.php_version }} + Node ${{ matrix.node_version }}
@@ -274,38 +272,24 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
         if: ${{ !env.ACT }}
 
-      - uses: docker/build-push-action@v6
+      - name: Build and push per-arch tag (${{ matrix.arch.cache_arch }})
         id: build
+        uses: docker/build-push-action@v6
         with:
           file: php-fpm/node/Dockerfile
           context: php-fpm/context
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.arch.docker_platform }}
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
             PHP_VERSION=${{ matrix.php_version }}
             NODE_VERSION=${{ matrix.node_version }}
             OS_RELEASE=${{ matrix.node_os_release }}
-          tags: ${{ env.REGISTRY_IMAGE }}
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          tags: ${{ env.REGISTRY_IMAGE }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
+          labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
+          push: true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
         if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-
-      - name: Export digest
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        run: |
-          mkdir -p ${{ runner.temp }}/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/digests/${digest#sha256:}-${{ matrix.php_version }}-node${{ matrix.node_version }}"
-
-      - name: Upload digest
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: digests-${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}
-          path: ${{ runner.temp }}/digests/*
-          if-no-files-found: error
-          retention-days: 1
 
   xdebug:
     needs: [ php-node, full-matrix ]
@@ -339,7 +323,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push by digest (${{ matrix.arch.cache_arch }})
+      - name: Build and push per-arch tag (${{ matrix.arch.cache_arch }})
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -350,27 +334,12 @@ jobs:
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
             PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
             XDEBUG_TYPE=${{ matrix.xdebug_type }}
-          tags: ${{ env.REGISTRY_XDEBUG }}
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          tags: ${{ env.REGISTRY_XDEBUG }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
+          labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
+          push: true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-debug:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-debug:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
         if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-
-      - name: Export digest
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        run: |
-          mkdir -p ${{ runner.temp }}/xdebug-digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/xdebug-digests/${digest#sha256:}-${{ matrix.php_version }}-node${{ matrix.node_version }}"
-
-      - name: Upload digest
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: xdebug-digests-${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}
-          path: ${{ runner.temp }}/xdebug-digests/*
-          if-no-files-found: error
-          retention-days: 1
 
   magento1:
     needs: [ full-matrix, php-node ]
@@ -404,7 +373,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push by digest (${{ matrix.arch.cache_arch }})
+      - name: Build and push per-arch tag (${{ matrix.arch.cache_arch }})
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -414,27 +383,12 @@ jobs:
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
             PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
-          tags: ${{ env.REGISTRY_MAGENTO1 }}
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          tags: ${{ env.REGISTRY_MAGENTO1 }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
+          labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
+          push: true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento1:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento1:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
         if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-
-      - name: Export digest
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        run: |
-          mkdir -p ${{ runner.temp }}/magento1-digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/magento1-digests/${digest#sha256:}-${{ matrix.php_version }}-node${{ matrix.node_version }}"
-
-      - name: Upload digest
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: magento1-digests-${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}
-          path: ${{ runner.temp }}/magento1-digests/*
-          if-no-files-found: error
-          retention-days: 1
 
   magento2:
     needs: [ full-matrix, php-node ]
@@ -468,7 +422,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push by digest (${{ matrix.arch.cache_arch }})
+      - name: Build and push per-arch tag (${{ matrix.arch.cache_arch }})
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -478,27 +432,12 @@ jobs:
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
             PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
-          tags: ${{ env.REGISTRY_MAGENTO2 }}
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          tags: ${{ env.REGISTRY_MAGENTO2 }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
+          labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
+          push: true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
         if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-
-      - name: Export digest
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        run: |
-          mkdir -p ${{ runner.temp }}/magento2-digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/magento2-digests/${digest#sha256:}-${{ matrix.php_version }}-node${{ matrix.node_version }}"
-
-      - name: Upload digest
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: magento2-digests-${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}
-          path: ${{ runner.temp }}/magento2-digests/*
-          if-no-files-found: error
-          retention-days: 1
 
   magento2-xdebug:
     needs: [ full-matrix, magento2 ]
@@ -532,7 +471,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push by digest (${{ matrix.arch.cache_arch }})
+      - name: Build and push per-arch tag (${{ matrix.arch.cache_arch }})
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -543,27 +482,12 @@ jobs:
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2
             PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
             XDEBUG_TYPE=${{ matrix.xdebug_type }}
-          tags: ${{ env.REGISTRY_MAGENTO2_DEBUG }}
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          tags: ${{ env.REGISTRY_MAGENTO2_DEBUG }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
+          labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
+          push: true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
         if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-
-      - name: Export digest
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        run: |
-          mkdir -p ${{ runner.temp }}/magento2-debug-digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/magento2-debug-digests/${digest#sha256:}-${{ matrix.php_version }}-node${{ matrix.node_version }}"
-
-      - name: Upload digest
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: magento2-debug-digests-${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}
-          path: ${{ runner.temp }}/magento2-debug-digests/*
-          if-no-files-found: error
-          retention-days: 1
 
   wordpress:
     needs: [ full-matrix, php-node ]
@@ -597,7 +521,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push by digest (${{ matrix.arch.cache_arch }})
+      - name: Build and push per-arch tag (${{ matrix.arch.cache_arch }})
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -607,30 +531,15 @@ jobs:
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
             PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
-          tags: ${{ env.REGISTRY_WORDPRESS }}
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          tags: ${{ env.REGISTRY_WORDPRESS }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
+          labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
+          push: true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
         if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
 
-      - name: Export digest
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        run: |
-          mkdir -p ${{ runner.temp }}/wordpress-digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/wordpress-digests/${digest#sha256:}-${{ matrix.php_version }}-node${{ matrix.node_version }}"
-
-      - name: Upload digest
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: wordpress-digests-${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}
-          path: ${{ runner.temp }}/wordpress-digests/*
-          if-no-files-found: error
-          retention-days: 1
-
   merge:
-    needs: [ php-fpm-build, php-node ]
+    needs: [ php-matrix, node-matrix, php-fpm-build, php-node ]
     # Run even when some build-matrix entries failed, so the combinations that
     # *did* build are still published. A single flaky build no longer blocks
     # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
@@ -641,13 +550,7 @@ jobs:
       packages: write
 
     steps:
-      - name: Download digests
-        uses: actions/download-artifact@v4
-        with:
-          path: ${{ runner.temp }}/digests
-          pattern: digests-*
-          merge-multiple: true
-        if: ${{ !env.ACT }}
+      - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -660,66 +563,19 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create and push manifests per PHP version
-        working-directory: ${{ runner.temp }}/digests
+      - name: Create and push manifests per version
         if: ${{ !env.ACT }}
+        env:
+          PHP_MATRIX: ${{ needs.php-matrix.outputs.matrix }}
+          NODE_MATRIX: ${{ needs.node-matrix.outputs.matrix }}
         run: |
-          set -uo pipefail
-          REGISTRY_IMAGE="${{ env.REGISTRY_IMAGE }}"
-          # Every image here is built for both architectures, so a complete
-          # multi-arch tag needs exactly this many per-arch digests. A version
-          # with fewer (a flaky single-arch failure) is skipped rather than
-          # published as a broken single-arch manifest — it keeps its previous
-          # image until the next run. Other, complete versions still publish.
-          EXPECTED_ARCHES=2
-
-          shopt -s nullglob
-          if [ -z "$(ls -A 2>/dev/null)" ]; then
-            echo "::warning::No digest artifacts found for ${REGISTRY_IMAGE} — nothing to merge."
-            exit 0
-          fi
-
-          # Digest files are named "<sha256-hex>-<version>" (version may itself
-          # contain dashes, e.g. "8.3-node18"); the sha is dash-free so field 2+
-          # is the version.
-          version_names=$(ls | cut -d- -f 2- | sort -u)
-          published=0
-          skipped=0
-          # no latest tag creation; only per-version manifests
-          for version in $version_names; do
-            references=""
-            count=0
-            for file in *-"${version}"; do
-              [ -e "$file" ] || continue
-              digest_sha256=${file%-${version}}
-              references="$references $REGISTRY_IMAGE@sha256:${digest_sha256}"
-              count=$((count + 1))
-            done
-
-            if [ "$count" -lt "$EXPECTED_ARCHES" ]; then
-              echo "::warning::Skipping ${REGISTRY_IMAGE}:${version} — only ${count}/${EXPECTED_ARCHES} arch digest(s) present; keeping previous image."
-              skipped=$((skipped + 1))
-              continue
-            fi
-
-            echo "Creating manifest for ${version} (${count} arches):${references}"
-            # shellcheck disable=SC2086
-            if docker buildx imagetools create -t "$REGISTRY_IMAGE:${version}" ${references}; then
-              published=$((published + 1))
-            else
-              echo "::warning::Failed to publish ${REGISTRY_IMAGE}:${version}; continuing with remaining versions."
-              skipped=$((skipped + 1))
-            fi
-          done
-
-          echo "Published ${published} tag(s), skipped ${skipped}, for ${REGISTRY_IMAGE}."
-          if [ "$published" -eq 0 ]; then
-            echo "::error::No ${REGISTRY_IMAGE} tags could be published."
-            exit 1
-          fi
+          {
+            jq -r '.include[] | "\(.php_version) \(.arch.cache_suffix)"' <<<"$PHP_MATRIX"
+            jq -r '.include[] | "\(.php_version)-node\(.node_version) \(.arch.cache_suffix)"' <<<"$NODE_MATRIX"
+          } | bash .github/scripts/merge-per-arch-tags.sh "${{ env.REGISTRY_IMAGE }}" "${{ github.run_id }}"
 
   merge-xdebug:
-    needs: [ xdebug ]
+    needs: [ full-matrix, xdebug ]
     # Run even when some build-matrix entries failed, so the combinations that
     # *did* build are still published. A single flaky build no longer blocks
     # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
@@ -730,13 +586,7 @@ jobs:
       packages: write
 
     steps:
-      - name: Download digests
-        uses: actions/download-artifact@v4
-        with:
-          path: ${{ runner.temp }}/xdebug-digests
-          pattern: xdebug-digests-*
-          merge-multiple: true
-        if: ${{ !env.ACT }}
+      - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -749,66 +599,16 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create and push manifests per PHP version
-        working-directory: ${{ runner.temp }}/xdebug-digests
+      - name: Create and push manifests per version
         if: ${{ !env.ACT }}
+        env:
+          MATRIX: ${{ needs.full-matrix.outputs.matrix }}
         run: |
-          set -uo pipefail
-          REGISTRY_IMAGE="${{ env.REGISTRY_XDEBUG }}"
-          # Every image here is built for both architectures, so a complete
-          # multi-arch tag needs exactly this many per-arch digests. A version
-          # with fewer (a flaky single-arch failure) is skipped rather than
-          # published as a broken single-arch manifest — it keeps its previous
-          # image until the next run. Other, complete versions still publish.
-          EXPECTED_ARCHES=2
-
-          shopt -s nullglob
-          if [ -z "$(ls -A 2>/dev/null)" ]; then
-            echo "::warning::No digest artifacts found for ${REGISTRY_IMAGE} — nothing to merge."
-            exit 0
-          fi
-
-          # Digest files are named "<sha256-hex>-<version>" (version may itself
-          # contain dashes, e.g. "8.3-node18"); the sha is dash-free so field 2+
-          # is the version.
-          version_names=$(ls | cut -d- -f 2- | sort -u)
-          published=0
-          skipped=0
-          # no latest tag creation; only per-version manifests
-          for version in $version_names; do
-            references=""
-            count=0
-            for file in *-"${version}"; do
-              [ -e "$file" ] || continue
-              digest_sha256=${file%-${version}}
-              references="$references $REGISTRY_IMAGE@sha256:${digest_sha256}"
-              count=$((count + 1))
-            done
-
-            if [ "$count" -lt "$EXPECTED_ARCHES" ]; then
-              echo "::warning::Skipping ${REGISTRY_IMAGE}:${version} — only ${count}/${EXPECTED_ARCHES} arch digest(s) present; keeping previous image."
-              skipped=$((skipped + 1))
-              continue
-            fi
-
-            echo "Creating manifest for ${version} (${count} arches):${references}"
-            # shellcheck disable=SC2086
-            if docker buildx imagetools create -t "$REGISTRY_IMAGE:${version}" ${references}; then
-              published=$((published + 1))
-            else
-              echo "::warning::Failed to publish ${REGISTRY_IMAGE}:${version}; continuing with remaining versions."
-              skipped=$((skipped + 1))
-            fi
-          done
-
-          echo "Published ${published} tag(s), skipped ${skipped}, for ${REGISTRY_IMAGE}."
-          if [ "$published" -eq 0 ]; then
-            echo "::error::No ${REGISTRY_IMAGE} tags could be published."
-            exit 1
-          fi
+          jq -r '.include[] | "\(.php_version)-node\(.node_version) \(.arch.cache_suffix)"' <<<"$MATRIX" \
+            | bash .github/scripts/merge-per-arch-tags.sh "${{ env.REGISTRY_XDEBUG }}" "${{ github.run_id }}"
 
   merge-magento1:
-    needs: [ magento1 ]
+    needs: [ full-matrix, magento1 ]
     # Run even when some build-matrix entries failed, so the combinations that
     # *did* build are still published. A single flaky build no longer blocks
     # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
@@ -819,13 +619,7 @@ jobs:
       packages: write
 
     steps:
-      - name: Download digests
-        uses: actions/download-artifact@v4
-        with:
-          path: ${{ runner.temp }}/magento1-digests
-          pattern: magento1-digests-*
-          merge-multiple: true
-        if: ${{ !env.ACT }}
+      - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -838,66 +632,16 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create and push manifests per PHP version
-        working-directory: ${{ runner.temp }}/magento1-digests
+      - name: Create and push manifests per version
         if: ${{ !env.ACT }}
+        env:
+          MATRIX: ${{ needs.full-matrix.outputs.matrix }}
         run: |
-          set -uo pipefail
-          REGISTRY_IMAGE="${{ env.REGISTRY_MAGENTO1 }}"
-          # Every image here is built for both architectures, so a complete
-          # multi-arch tag needs exactly this many per-arch digests. A version
-          # with fewer (a flaky single-arch failure) is skipped rather than
-          # published as a broken single-arch manifest — it keeps its previous
-          # image until the next run. Other, complete versions still publish.
-          EXPECTED_ARCHES=2
-
-          shopt -s nullglob
-          if [ -z "$(ls -A 2>/dev/null)" ]; then
-            echo "::warning::No digest artifacts found for ${REGISTRY_IMAGE} — nothing to merge."
-            exit 0
-          fi
-
-          # Digest files are named "<sha256-hex>-<version>" (version may itself
-          # contain dashes, e.g. "8.3-node18"); the sha is dash-free so field 2+
-          # is the version.
-          version_names=$(ls | cut -d- -f 2- | sort -u)
-          published=0
-          skipped=0
-          # no latest tag creation; only per-version manifests
-          for version in $version_names; do
-            references=""
-            count=0
-            for file in *-"${version}"; do
-              [ -e "$file" ] || continue
-              digest_sha256=${file%-${version}}
-              references="$references $REGISTRY_IMAGE@sha256:${digest_sha256}"
-              count=$((count + 1))
-            done
-
-            if [ "$count" -lt "$EXPECTED_ARCHES" ]; then
-              echo "::warning::Skipping ${REGISTRY_IMAGE}:${version} — only ${count}/${EXPECTED_ARCHES} arch digest(s) present; keeping previous image."
-              skipped=$((skipped + 1))
-              continue
-            fi
-
-            echo "Creating manifest for ${version} (${count} arches):${references}"
-            # shellcheck disable=SC2086
-            if docker buildx imagetools create -t "$REGISTRY_IMAGE:${version}" ${references}; then
-              published=$((published + 1))
-            else
-              echo "::warning::Failed to publish ${REGISTRY_IMAGE}:${version}; continuing with remaining versions."
-              skipped=$((skipped + 1))
-            fi
-          done
-
-          echo "Published ${published} tag(s), skipped ${skipped}, for ${REGISTRY_IMAGE}."
-          if [ "$published" -eq 0 ]; then
-            echo "::error::No ${REGISTRY_IMAGE} tags could be published."
-            exit 1
-          fi
+          jq -r '.include[] | "\(.php_version)-node\(.node_version) \(.arch.cache_suffix)"' <<<"$MATRIX" \
+            | bash .github/scripts/merge-per-arch-tags.sh "${{ env.REGISTRY_MAGENTO1 }}" "${{ github.run_id }}"
 
   merge-magento2:
-    needs: [ magento2 ]
+    needs: [ full-matrix, magento2 ]
     # Run even when some build-matrix entries failed, so the combinations that
     # *did* build are still published. A single flaky build no longer blocks
     # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
@@ -908,13 +652,7 @@ jobs:
       packages: write
 
     steps:
-      - name: Download digests
-        uses: actions/download-artifact@v4
-        with:
-          path: ${{ runner.temp }}/magento2-digests
-          pattern: magento2-digests-*
-          merge-multiple: true
-        if: ${{ !env.ACT }}
+      - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -927,66 +665,16 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create and push manifests per PHP version
-        working-directory: ${{ runner.temp }}/magento2-digests
+      - name: Create and push manifests per version
         if: ${{ !env.ACT }}
+        env:
+          MATRIX: ${{ needs.full-matrix.outputs.matrix }}
         run: |
-          set -uo pipefail
-          REGISTRY_IMAGE="${{ env.REGISTRY_MAGENTO2 }}"
-          # Every image here is built for both architectures, so a complete
-          # multi-arch tag needs exactly this many per-arch digests. A version
-          # with fewer (a flaky single-arch failure) is skipped rather than
-          # published as a broken single-arch manifest — it keeps its previous
-          # image until the next run. Other, complete versions still publish.
-          EXPECTED_ARCHES=2
-
-          shopt -s nullglob
-          if [ -z "$(ls -A 2>/dev/null)" ]; then
-            echo "::warning::No digest artifacts found for ${REGISTRY_IMAGE} — nothing to merge."
-            exit 0
-          fi
-
-          # Digest files are named "<sha256-hex>-<version>" (version may itself
-          # contain dashes, e.g. "8.3-node18"); the sha is dash-free so field 2+
-          # is the version.
-          version_names=$(ls | cut -d- -f 2- | sort -u)
-          published=0
-          skipped=0
-          # no latest tag creation; only per-version manifests
-          for version in $version_names; do
-            references=""
-            count=0
-            for file in *-"${version}"; do
-              [ -e "$file" ] || continue
-              digest_sha256=${file%-${version}}
-              references="$references $REGISTRY_IMAGE@sha256:${digest_sha256}"
-              count=$((count + 1))
-            done
-
-            if [ "$count" -lt "$EXPECTED_ARCHES" ]; then
-              echo "::warning::Skipping ${REGISTRY_IMAGE}:${version} — only ${count}/${EXPECTED_ARCHES} arch digest(s) present; keeping previous image."
-              skipped=$((skipped + 1))
-              continue
-            fi
-
-            echo "Creating manifest for ${version} (${count} arches):${references}"
-            # shellcheck disable=SC2086
-            if docker buildx imagetools create -t "$REGISTRY_IMAGE:${version}" ${references}; then
-              published=$((published + 1))
-            else
-              echo "::warning::Failed to publish ${REGISTRY_IMAGE}:${version}; continuing with remaining versions."
-              skipped=$((skipped + 1))
-            fi
-          done
-
-          echo "Published ${published} tag(s), skipped ${skipped}, for ${REGISTRY_IMAGE}."
-          if [ "$published" -eq 0 ]; then
-            echo "::error::No ${REGISTRY_IMAGE} tags could be published."
-            exit 1
-          fi
+          jq -r '.include[] | "\(.php_version)-node\(.node_version) \(.arch.cache_suffix)"' <<<"$MATRIX" \
+            | bash .github/scripts/merge-per-arch-tags.sh "${{ env.REGISTRY_MAGENTO2 }}" "${{ github.run_id }}"
 
   merge-magento2-xdebug:
-    needs: [ magento2-xdebug ]
+    needs: [ full-matrix, magento2-xdebug ]
     # Run even when some build-matrix entries failed, so the combinations that
     # *did* build are still published. A single flaky build no longer blocks
     # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
@@ -997,13 +685,7 @@ jobs:
       packages: write
 
     steps:
-      - name: Download digests
-        uses: actions/download-artifact@v4
-        with:
-          path: ${{ runner.temp }}/magento2-debug-digests
-          pattern: magento2-debug-digests-*
-          merge-multiple: true
-        if: ${{ !env.ACT }}
+      - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -1016,66 +698,16 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create and push manifests per PHP version
-        working-directory: ${{ runner.temp }}/magento2-debug-digests
+      - name: Create and push manifests per version
         if: ${{ !env.ACT }}
+        env:
+          MATRIX: ${{ needs.full-matrix.outputs.matrix }}
         run: |
-          set -uo pipefail
-          REGISTRY_IMAGE="${{ env.REGISTRY_MAGENTO2_DEBUG }}"
-          # Every image here is built for both architectures, so a complete
-          # multi-arch tag needs exactly this many per-arch digests. A version
-          # with fewer (a flaky single-arch failure) is skipped rather than
-          # published as a broken single-arch manifest — it keeps its previous
-          # image until the next run. Other, complete versions still publish.
-          EXPECTED_ARCHES=2
-
-          shopt -s nullglob
-          if [ -z "$(ls -A 2>/dev/null)" ]; then
-            echo "::warning::No digest artifacts found for ${REGISTRY_IMAGE} — nothing to merge."
-            exit 0
-          fi
-
-          # Digest files are named "<sha256-hex>-<version>" (version may itself
-          # contain dashes, e.g. "8.3-node18"); the sha is dash-free so field 2+
-          # is the version.
-          version_names=$(ls | cut -d- -f 2- | sort -u)
-          published=0
-          skipped=0
-          # no latest tag creation; only per-version manifests
-          for version in $version_names; do
-            references=""
-            count=0
-            for file in *-"${version}"; do
-              [ -e "$file" ] || continue
-              digest_sha256=${file%-${version}}
-              references="$references $REGISTRY_IMAGE@sha256:${digest_sha256}"
-              count=$((count + 1))
-            done
-
-            if [ "$count" -lt "$EXPECTED_ARCHES" ]; then
-              echo "::warning::Skipping ${REGISTRY_IMAGE}:${version} — only ${count}/${EXPECTED_ARCHES} arch digest(s) present; keeping previous image."
-              skipped=$((skipped + 1))
-              continue
-            fi
-
-            echo "Creating manifest for ${version} (${count} arches):${references}"
-            # shellcheck disable=SC2086
-            if docker buildx imagetools create -t "$REGISTRY_IMAGE:${version}" ${references}; then
-              published=$((published + 1))
-            else
-              echo "::warning::Failed to publish ${REGISTRY_IMAGE}:${version}; continuing with remaining versions."
-              skipped=$((skipped + 1))
-            fi
-          done
-
-          echo "Published ${published} tag(s), skipped ${skipped}, for ${REGISTRY_IMAGE}."
-          if [ "$published" -eq 0 ]; then
-            echo "::error::No ${REGISTRY_IMAGE} tags could be published."
-            exit 1
-          fi
+          jq -r '.include[] | "\(.php_version)-node\(.node_version) \(.arch.cache_suffix)"' <<<"$MATRIX" \
+            | bash .github/scripts/merge-per-arch-tags.sh "${{ env.REGISTRY_MAGENTO2_DEBUG }}" "${{ github.run_id }}"
 
   merge-wordpress:
-    needs: [ wordpress ]
+    needs: [ full-matrix, wordpress ]
     # Run even when some build-matrix entries failed, so the combinations that
     # *did* build are still published. A single flaky build no longer blocks
     # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
@@ -1086,13 +718,7 @@ jobs:
       packages: write
 
     steps:
-      - name: Download digests
-        uses: actions/download-artifact@v4
-        with:
-          path: ${{ runner.temp }}/wordpress-digests
-          pattern: wordpress-digests-*
-          merge-multiple: true
-        if: ${{ !env.ACT }}
+      - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -1105,60 +731,10 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create and push manifests per PHP version
-        working-directory: ${{ runner.temp }}/wordpress-digests
+      - name: Create and push manifests per version
         if: ${{ !env.ACT }}
+        env:
+          MATRIX: ${{ needs.full-matrix.outputs.matrix }}
         run: |
-          set -uo pipefail
-          REGISTRY_IMAGE="${{ env.REGISTRY_WORDPRESS }}"
-          # Every image here is built for both architectures, so a complete
-          # multi-arch tag needs exactly this many per-arch digests. A version
-          # with fewer (a flaky single-arch failure) is skipped rather than
-          # published as a broken single-arch manifest — it keeps its previous
-          # image until the next run. Other, complete versions still publish.
-          EXPECTED_ARCHES=2
-
-          shopt -s nullglob
-          if [ -z "$(ls -A 2>/dev/null)" ]; then
-            echo "::warning::No digest artifacts found for ${REGISTRY_IMAGE} — nothing to merge."
-            exit 0
-          fi
-
-          # Digest files are named "<sha256-hex>-<version>" (version may itself
-          # contain dashes, e.g. "8.3-node18"); the sha is dash-free so field 2+
-          # is the version.
-          version_names=$(ls | cut -d- -f 2- | sort -u)
-          published=0
-          skipped=0
-          # no latest tag creation; only per-version manifests
-          for version in $version_names; do
-            references=""
-            count=0
-            for file in *-"${version}"; do
-              [ -e "$file" ] || continue
-              digest_sha256=${file%-${version}}
-              references="$references $REGISTRY_IMAGE@sha256:${digest_sha256}"
-              count=$((count + 1))
-            done
-
-            if [ "$count" -lt "$EXPECTED_ARCHES" ]; then
-              echo "::warning::Skipping ${REGISTRY_IMAGE}:${version} — only ${count}/${EXPECTED_ARCHES} arch digest(s) present; keeping previous image."
-              skipped=$((skipped + 1))
-              continue
-            fi
-
-            echo "Creating manifest for ${version} (${count} arches):${references}"
-            # shellcheck disable=SC2086
-            if docker buildx imagetools create -t "$REGISTRY_IMAGE:${version}" ${references}; then
-              published=$((published + 1))
-            else
-              echo "::warning::Failed to publish ${REGISTRY_IMAGE}:${version}; continuing with remaining versions."
-              skipped=$((skipped + 1))
-            fi
-          done
-
-          echo "Published ${published} tag(s), skipped ${skipped}, for ${REGISTRY_IMAGE}."
-          if [ "$published" -eq 0 ]; then
-            echo "::error::No ${REGISTRY_IMAGE} tags could be published."
-            exit 1
-          fi
+          jq -r '.include[] | "\(.php_version)-node\(.node_version) \(.arch.cache_suffix)"' <<<"$MATRIX" \
+            | bash .github/scripts/merge-per-arch-tags.sh "${{ env.REGISTRY_WORDPRESS }}" "${{ github.run_id }}"

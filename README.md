@@ -84,8 +84,9 @@ everything else:
 - **Resilient multi-arch merge (php-fpm).** php-fpm builds each architecture
   separately and then merges them into a multi-arch tag. The merge jobs run
   **even if some builds failed** (`if: !cancelled()`), publish every version that
-  has *both* architectures, and **skip** any version missing an arch (it keeps its
-  previous image) instead of failing the whole run. Previously a single flaky
+  has *both* architectures built in this run, and **skip** any version missing one (it
+  keeps its previous image) instead of failing the whole run. Each skip is listed in
+  the job's step summary. Previously a single flaky
   combination skipped the merge and blocked *every* php-fpm tag — that is fixed.
 - **EOL combinations are non-fatal.** End-of-life or experimental PHP/Node
   combinations are marked `continue-on-error`, so a failure there can't fail the run.
@@ -105,7 +106,7 @@ that watches it, without having to touch a `Dockerfile`.
   workflow uses, or
 - Run a workflow locally with [`act`](https://github.com/nektos/act). The jobs only run
   for the `master` ref, so on a feature branch pass an event file containing
-  `"ref": "refs/heads/master"` (`act -e event.json`). Registry logins, pushes and digest
+  `"ref": "refs/heads/master"` (`act -e event.json`). Registry logins, pushes and manifest
   merges are skipped under `act`.
 
 ## Adding or changing a version
@@ -198,18 +199,32 @@ Version-conditional steps inside these Dockerfiles use shell `sort -g` / `sort -
 comparisons against `${PHP_VERSION}` (e.g. "install imagick only if PHP > 7.2 &&
 < 8.3").
 
-### Multi-arch via digest + manifest merge
+### Multi-arch via per-arch tags + manifest merge
 
 Each layer is built **per-architecture separately** on native amd64 and arm64
-runners (no slow QEMU emulation), pushed with `push-by-digest=true` (no tag), and the
-resulting digest is uploaded as a workflow artifact. Separate `merge-*` jobs then
-download all digests for a given image, group them by version, and run
-`docker buildx imagetools create` to assemble the multi-arch manifest tagged
-`:<php_version>`. As described in [Robustness](#robustness-one-failure-cant-block-the-rest),
-a version is only published once **both** architectures are present.
+runners (no slow QEMU emulation). Each build pushes a per-arch tag,
+`<version>-arch-<x86|arm64>` (e.g. `php-fpm-magento2:8.3-node20-arch-arm64`). The tag
+carries the label `org.epartment.roll.ci-run-id` set to the id of the run that built it.
+Separate `merge-*` jobs then run `.github/scripts/merge-per-arch-tags.sh` for every
+version in the build matrix. For each version the script:
 
-When adding a new layered image you must add **both** a build job (emitting digests)
-and a matching `merge-*` job (assembling the manifest) — they go together.
+1. reads each architecture's per-arch tag with `docker buildx imagetools inspect`;
+2. if both tags carry **this run's** id, runs `docker buildx imagetools create` to
+   assemble the multi-arch manifest `:<version>` from their digests;
+3. otherwise skips the version, which keeps its previous image (see
+   [Robustness](#robustness-one-failure-cant-block-the-rest)).
+
+The run-id check means a failed leg can never pair an old image with a new one. The
+`-arch-` tags are internal hand-off tags; use the plain `:<version>` tags. Because runs
+share these tags, the workflow queues runs (`concurrency`, no cancelling). A push during
+the daily build waits for it to finish rather than overwriting its tags halfway.
+
+The hand-off deliberately does **not** use workflow artifacts. A run lists only about
+its first 1000 artifacts, and this workflow produces well over 1000 builds. Every digest
+past that cutoff was silently invisible to the merge jobs.
+
+When adding a new layered image you must add **both** a build job (pushing labelled
+per-arch tags) and a matching `merge-*` job (assembling the manifest) — they go together.
 
 ### Base-image mirror (optional)
 

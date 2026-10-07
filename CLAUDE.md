@@ -45,9 +45,13 @@ false` is set everywhere, so one version failing never stops the others.
 - Build-matrix jobs are independent (`fail-fast: false`) — never introduce a shared
   failure point across versions.
 - php-fpm `merge-*` jobs run with `if: ${{ !cancelled() && ... }}` and publish only
-  versions that have **both** arch digests (`EXPECTED_ARCHES=2`), skipping incomplete
-  ones rather than failing. This is what stops one flaky combination from blocking
+  versions whose per-arch tags were **all** built in this run (checked by run-id label in
+  `.github/scripts/merge-per-arch-tags.sh`), skipping incomplete ones rather than failing. This is what stops one flaky combination from blocking
   every tag — don't revert it to a plain `needs:`-gated merge.
+- The php-fpm workflow has a workflow-level `concurrency` group with
+  `cancel-in-progress: false`. Runs share the per-arch hand-off tags, so overlapping runs
+  would mix run ids between arches and both merges would skip. Keep it, and never set
+  `cancel-in-progress: true`, which would kill a multi-hour build.
 - EOL/experimental combinations are `continue-on-error` (see `constants.php`).
 - In-Dockerfile downloads use `curl --retry` / retry loops, not bare `ADD <url>` or a
   single `composer require`/`npm install`.
@@ -60,7 +64,7 @@ To validate a change before merging, build the image locally (`docker buildx bui
 with the same build args the workflow passes), or run the workflow with `act`. Because
 the entry jobs are gated on `master`, `act` on a feature branch skips everything unless
 you pass an event with `"ref": "refs/heads/master"` (`act -e event.json`); logins,
-pushes and digest merges are skipped under `act` either way.
+pushes and manifest merges are skipped under `act` either way.
 
 ## The php-fpm image graph (most important architecture)
 
@@ -113,17 +117,24 @@ The simple per-service workflows use the same floor/pin/deny policy, but inline 
 shell variables (`MIN` / `PIN` / `DENY`) in their own `discover` job, plus a
 `versions` `workflow_dispatch` input for ad-hoc builds.
 
-### Multi-arch via digest + manifest merge
+### Multi-arch via per-arch tags + manifest merge
 
 Each layer is built **per-architecture separately** (on native amd64 and arm64
-runners — no QEMU), pushed `push-by-digest=true` (no tag), and the digest uploaded as
-an artifact. Separate `merge*` jobs then download all digests for a given image,
-group them by PHP version, and run `docker buildx imagetools create` to assemble
-the multi-arch manifest tagged `:<php_version>`. A version is published **only when
-both arch digests are present** (incomplete ones are skipped, keeping their previous
-image); the merge runs even if some builds failed. No `latest` tag is created. When
-adding a new layered image, you must add both a build job (emitting digests) and a
-matching `merge-*` job (assembling the manifest) — they go together.
+runners — no QEMU; `platforms:` must be the leg's own `matrix.arch.docker_platform`).
+Each leg pushes `<image>:<version>-arch-<cache_suffix>`, labelled
+`$PER_ARCH_RUN_LABEL=<run id>`. Separate `merge*` jobs feed every
+`<version> <arch-suffix>` pair of the build matrix (jq over the matrix job's output) into
+`.github/scripts/merge-per-arch-tags.sh`. The script inspects the per-arch tags in
+parallel and runs `docker buildx imagetools create` from their digests only when all
+arches of a version carry **this run's** id. Incomplete or stale versions are skipped
+and keep their previous image, and every skip is listed in the step summary. The merge
+runs even if some builds failed. No `latest` tag is created.
+
+Do **not** go back to workflow artifacts for the digest hand-off. A run lists only about
+its first 1000 artifacts. This matrix produces ~1350, so the last layers' digests were
+silently invisible to their merge jobs (2026-10-07). When adding a new layered image,
+add both a build job (pushing a labelled per-arch tag) and a matching `merge-*` job —
+they go together.
 
 There is also an optional `mirror-base-images.yml` workflow that mirrors the upstream
 bases (`php`/`node`/`composer`/`phantomjs`) into `ghcr.io/<owner>/base-images/*` to

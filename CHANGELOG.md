@@ -12,6 +12,22 @@ summarised as the net result.
 
 ### Fixed
 
+- **php-fpm (all layers):** the scheduled run of 2026-10-07 published no
+  `php-fpm-magento2-debug` tags at all. The other layers' merges went green but silently
+  skipped many 8.3/8.4 tags. Every build had succeeded. The cause: the run produced 1358
+  digest artifacts, and a workflow run lists only about its first 1000, so the merge jobs
+  never saw the digests uploaded last. The hand-off now goes through the registry:
+  - each leg pushes `<version>-arch-<x86|arm64>`, labelled with the run id;
+  - each merge publishes a version only when all its per-arch tags come from the current
+    run (`.github/scripts/merge-per-arch-tags.sh`);
+  - skipped versions are listed in the step summary and in one annotation, because GitHub
+    shows at most 10 warnings per step;
+  - runs are queued instead of overlapping (`concurrency`), because overlapping runs would
+    overwrite each other's per-arch tags.
+- **php-fpm + Node:** each `php-node` leg built *both* platforms, the other one under QEMU,
+  so `php-fpm:<php>-node<n>` held two amd64 and two arm64 images. An arm64 pull could get
+  the emulated build. Each leg now builds only its own runner's platform.
+
 - **php-fpm magento2 (PHP 7.3–8.1):** every build of these images failed at the magerun smoke
   test, so none of them had been published since 2026-09-03 and the published tags still carried
   an n98-magerun2 that cannot start (`roll setup-autologin` reports "n98-magerun2 is not
