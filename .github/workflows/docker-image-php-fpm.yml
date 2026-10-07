@@ -279,7 +279,7 @@ jobs:
         with:
           file: php-fpm/node/Dockerfile
           context: php-fpm/context
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.arch.docker_platform }}
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
             PHP_VERSION=${{ matrix.php_version }}

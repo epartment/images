@@ -12,6 +12,10 @@ summarised as the net result.
 
 ### Fixed
 
+- **php-fpm + Node:** each `php-node` leg built *both* platforms, the other one under QEMU,
+  so `php-fpm:<php>-node<n>` held two amd64 and two arm64 images. An arm64 pull could get
+  the emulated build. Each leg now builds only its own runner's platform.
+
 - **php-fpm magento2 (PHP 7.3–8.1):** every build of these images failed at the magerun smoke
   test, so none of them had been published since 2026-09-03 and the published tags still carried
   an n98-magerun2 that cannot start (`roll setup-autologin` reports "n98-magerun2 is not
