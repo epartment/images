@@ -34,6 +34,15 @@ env:
   # this run's id (see .github/scripts/merge-per-arch-tags.sh).
   PER_ARCH_RUN_LABEL: org.epartment.roll.ci-run-id
 
+# Runs share the per-arch hand-off tags, so two overlapping runs could leave x86
+# and arm64 labelled with different run ids and both merges would skip the version.
+# Queue runs instead of overlapping them; never cancel a build in progress. The
+# group includes the ref so a no-op run from another branch cannot displace a
+# queued master run (GitHub keeps one pending run per group; a newer one replaces it).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # ---------------------------------------------------------------------------
   # Discover which PHP / Node versions to build by listing the upstream tags

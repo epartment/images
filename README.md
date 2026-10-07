@@ -215,7 +215,9 @@ version in the build matrix. For each version the script:
    [Robustness](#robustness-one-failure-cant-block-the-rest)).
 
 The run-id check means a failed leg can never pair an old image with a new one. The
-`-arch-` tags are internal hand-off tags; use the plain `:<version>` tags.
+`-arch-` tags are internal hand-off tags; use the plain `:<version>` tags. Because runs
+share these tags, the workflow queues runs (`concurrency`, no cancelling). A push during
+the daily build waits for it to finish rather than overwriting its tags halfway.
 
 The hand-off deliberately does **not** use workflow artifacts. A run lists only about
 its first 1000 artifacts, and this workflow produces well over 1000 builds. Every digest

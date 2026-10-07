@@ -48,6 +48,10 @@ false` is set everywhere, so one version failing never stops the others.
   versions whose per-arch tags were **all** built in this run (checked by run-id label in
   `.github/scripts/merge-per-arch-tags.sh`), skipping incomplete ones rather than failing. This is what stops one flaky combination from blocking
   every tag — don't revert it to a plain `needs:`-gated merge.
+- The php-fpm workflow has a workflow-level `concurrency` group with
+  `cancel-in-progress: false`. Runs share the per-arch hand-off tags, so overlapping runs
+  would mix run ids between arches and both merges would skip. Keep it, and never set
+  `cancel-in-progress: true`, which would kill a multi-hour build.
 - EOL/experimental combinations are `continue-on-error` (see `constants.php`).
 - In-Dockerfile downloads use `curl --retry` / retry loops, not bare `ADD <url>` or a
   single `composer require`/`npm install`.

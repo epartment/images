@@ -21,7 +21,9 @@ summarised as the net result.
   - each merge publishes a version only when all its per-arch tags come from the current
     run (`.github/scripts/merge-per-arch-tags.sh`);
   - skipped versions are listed in the step summary and in one annotation, because GitHub
-    shows at most 10 warnings per step.
+    shows at most 10 warnings per step;
+  - runs are queued instead of overlapping (`concurrency`), because overlapping runs would
+    overwrite each other's per-arch tags.
 - **php-fpm + Node:** each `php-node` leg built *both* platforms, the other one under QEMU,
   so `php-fpm:<php>-node<n>` held two amd64 and two arm64 images. An arm64 pull could get
   the emulated build. Each leg now builds only its own runner's platform.
