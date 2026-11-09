@@ -102,6 +102,13 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
   reads — see [M6](#m6). Structurally, have `discover` emit the suite it actually matched alongside
   the version (for example `8.5:bookworm`) and let `php_os_release()` use the pinned map only as an
   override, so the default follows upstream instead of guessing.
+- *Update 2026-11-09:* **Fixed.** 8.5 is mapped to `bookworm` and removed from `PHP_DENY_VERSIONS`,
+  and `php_os_release()` now defaults an unmapped PHP version to bookworm, so a future 8.6 no longer
+  resolves to a bullseye tag that does not exist. The discover job still does not emit the suite it
+  matched; that structural fix remains open, but the default now points the right way. The 8.5
+  chain (base, node22, `php-fpm-debug`, `php-fpm-magento2`, `php-fpm-magento2-debug`) was built
+  locally for arm64 and runs: PHP 8.5.12 on Debian 12.15, every Magento extension loads, and
+  Xdebug 3.5.3 loads in the debug images. Not yet confirmed in CI.
 
 <a id="h3"></a>
 **H3. The whole matrix is pinned to Debian bullseye, and one hardcoded package blocks the move off it** — `.github/workflows/php-matrix/constants.php:64-84`, `php-fpm/magento2/Dockerfile:42`
@@ -133,6 +140,24 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
   H6's snapshot pin only buys time. This migration is still the real fix for PHP 8.1 and later. PHP
   7.3, 7.4 and 8.0 have no upstream base image newer than bullseye (verified with
   `docker manifest inspect`), so they can only stay on the snapshot or move to `PHP_DENY_VERSIONS`.
+- *Update 2026-11-09:* **Partly fixed.** The Dockerfiles now build on both releases, and PHP 8.5 is
+  the first version on bookworm. 8.1–8.4 stay on bullseye for now, so flipping them is the remaining
+  step. Making the Dockerfiles release-aware took four changes:
+  - The magento2 layer installs the OpenSSL runtime under whichever name the release offers
+    (`libssl3t64`, `libssl3`, `libssl1.1`).
+  - `python2` is installed only where it has a real candidate. On bookworm, `apt-cache show python2`
+    exits 0 because the name survives as a virtual package, so the probe checks for a `Version:`
+    line. That `RUN` step also gained `set -e`: without it the failed `apt-get install` was
+    swallowed, and the build only broke later at `/usr/bin/pip: not found`.
+  - `pip install segno` runs with `PIP_BREAK_SYSTEM_PACKAGES=1` (bookworm's PEP 668 guard; older pip
+    ignores the variable).
+  - The `/bin/fish` link is skipped when it already exists, because bookworm merges `/bin` into
+    `/usr/bin`.
+
+  Bullseye regression check, local arm64: the 8.4 base image builds on bullseye with `python2`
+  still installed, and the magento2 layer builds on the published `php-fpm:8.4-node22` and picks
+  `libssl1.1`. Flipping a bullseye version to bookworm is now a one-line change in
+  `PHP_VERSIONS_OS_RELEASE` per version, plus a test build.
 
 <a id="h4"></a>
 **H4. A daily scheduled build failed for 96 consecutive days without notifying anyone** — `.github/workflows/docker-image-php-fpm.yml:13-14`
@@ -457,7 +482,7 @@ Recorded so the next reader does not re-investigate them.
 | Do the external build-stage images support arm64? | **Yes, all of them.** Verified with `docker manifest inspect`: `99designs/phantomjs:2.1.1` (amd64 + arm64), `composer:1`, `composer:2`, `composer:2.2` and `golang:alpine` (all multi-arch). The phantomjs copy at `php-fpm/node/Dockerfile:38` was the strongest suspect for an arm64-only failure and is not one. |
 | Does the `merge` job group digests correctly when base and node artefacts share one directory? | **Yes.** Base digests are named `<sha>-<php>` and node digests `<sha>-<php>-node<n>` (`.github/workflows/docker-image-php-fpm.yml:236,299`), both downloaded under `pattern: digests-*` (line 648). `cut -d- -f 2-` recovers the full version because the sha is dash-free, and the `*-"${version}"` glob does not cross between the two forms. |
 | Is the `EXPECTED_ARCHES=2` skip logic sound? | **Yes.** A version with fewer than two arch digests is skipped with a warning and keeps its previous image rather than being republished as a single-arch manifest, and the loop continues to the remaining versions. This is what prevented the outage from *removing* existing tags — the images went stale rather than disappearing. |
-| Do the other pinned PHP base tags exist upstream? | **Yes**, except 8.5 ([H2](#h2)). `php:7.3-fpm-bullseye`, `php:8.3-fpm-bullseye` and `php:8.4-fpm-bullseye` all resolve, as do `node:19-bullseye` and `node:22-bullseye`. |
+| Do the other pinned PHP base tags exist upstream? | **Yes**, except `php:8.5-fpm-bullseye` ([H2](#h2); 8.5 now builds on bookworm). `php:7.3-fpm-bullseye`, `php:8.3-fpm-bullseye` and `php:8.4-fpm-bullseye` all resolve, as do `node:19-bullseye` and `node:22-bullseye`. |
 | Is the whole `bullseye` suite gone from `deb.debian.org`? (2026-09-24) | **No.** `apt-get update` against `bullseye`, `bullseye-updates` and `bullseye-security` succeeds. Only the security *pool* files are gone ([H6](#h6)). |
 | Is the published Elasticsearch `analysis-icu-8.15.5.zip` itself corrupt? | **No.** A fresh download matches its `.sha512`. The CI failure was a truncated transfer ([M8](#m8)). |
 | Was the `mailpit` sendmail builder stage or the `install-php-extensions` download the cause? | **No.** Both complete successfully in a local reproduction of the failing build; the base image reaches step 42 of 45 before failing at [H1](#h1). |

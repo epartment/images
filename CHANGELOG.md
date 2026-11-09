@@ -10,6 +10,22 @@ summarised as the net result.
 
 ## Unreleased
 
+### Added
+
+- **php-fpm 8.5:** PHP 8.5 builds again, for every layer and Node pairing (`php-fpm`,
+  `php-fpm-debug`, `php-fpm-magento1`, `php-fpm-magento2`, `php-fpm-magento2-debug`,
+  `php-fpm-wordpress`). Upstream publishes `php:8.5-fpm` only on bookworm, so 8.5 is the first
+  version on Debian bookworm. The older versions stay on bullseye. A PHP version missing from
+  `PHP_VERSIONS_OS_RELEASE` now defaults to bookworm instead of bullseye, so 8.6 and later no
+  longer point at a base tag that does not exist. Making the Dockerfiles work on both releases:
+  - `python2` is installed only where the release still has it (bookworm has none), and that
+    step now fails on a failed `apt-get install` instead of continuing without `python3-pip`;
+  - `pip install segno` sets `PIP_BREAK_SYSTEM_PACKAGES=1`, because bookworm's pip refuses
+    system-wide installs (PEP 668);
+  - the `/bin/fish` link is skipped where `/bin` is merged into `/usr/bin` (bookworm);
+  - the magento2 layer installs the OpenSSL runtime for mydumper/myloader under the name the
+    release uses (`libssl1.1`, `libssl3` or `libssl3t64`), instead of `libssl1.1` by name.
+
 ### Fixed
 
 - **php-fpm (all layers):** the scheduled run of 2026-10-07 published no

@@ -135,8 +135,11 @@ RUN if [ "$(printf "7.3\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{prin
     then apt-get install -y --no-install-recommends bind9utils; fi
 
 # If PHP >= 7.1
-RUN if [ "$(printf "7.1\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{print $1"."$2}')" = "7.1" ]; \
-    then apt-get install -y --no-install-recommends libmariadb3 libmariadb-dev python3 python3-pip python2; \
+# python2 exists up to bullseye only. Bookworm keeps it as a virtual name (`apt-cache show` exits 0),
+# so the probe requires a real Version; `set -e` stops a failed install from passing silently.
+RUN set -e; if [ "$(printf "7.1\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{print $1"."$2}')" = "7.1" ]; \
+    then python2_pkg=""; if apt-cache show python2 2>/dev/null | grep -q '^Version:'; then python2_pkg="python2"; fi; \
+    apt-get install -y --no-install-recommends libmariadb3 libmariadb-dev python3 python3-pip ${python2_pkg}; \
     sed -i '/disable ghostscript format types/,+6d' /etc/ImageMagick-6/policy.xml; \
     if [ ! -f "/usr/bin/pip" ]; then ln -s /usr/bin/pip3 /usr/bin/pip; ln -s /usr/bin/python3 /usr/bin/python; fi; fi
 
@@ -144,11 +147,14 @@ RUN if [ "$(printf "7.1\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{prin
 RUN if [ "$(printf "7.3\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{print $1"."$2}')" = "7.3" ]; \
     then apt-get install -y --no-install-recommends bind9-utils; fi
 
-RUN /usr/bin/pip install segno
+# Bookworm's pip refuses system-wide installs (PEP 668) unless told otherwise; older pip ignores
+# the variable, so the same line works on bullseye.
+RUN PIP_BREAK_SYSTEM_PACKAGES=1 /usr/bin/pip install segno
 
+# Bookworm merges /bin into /usr/bin, so /bin/fish already exists there.
 RUN mkdir -p /etc/zsh/zshrc.d  \
     && echo "autoload -U compinit; compinit" > /etc/zsh/zshrc.d/completions.zsh \
-    && ln -s /usr/bin/fish /bin/fish
+    && { [ -e /bin/fish ] || ln -s /usr/bin/fish /bin/fish; }
 
 RUN set -eux; \
 	{ \

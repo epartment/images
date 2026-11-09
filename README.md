@@ -153,14 +153,15 @@ instead of inline YAML:
 ```php
 const PHP_MIN_VERSION  = '7.3';                  // floor
 const PHP_DENY_VERSIONS = [];                     // never build
-const PHP_PIN_VERSIONS  = ['7.3', ..., '8.4'];    // always build (+ fallback)
+const PHP_PIN_VERSIONS  = ['7.3', ..., '8.5'];    // always build (+ fallback)
 // …and the same trio for Node (NODE_MIN_VERSION / NODE_DENY_VERSIONS / NODE_PIN_VERSIONS)
 ```
 
 The same file also holds:
 
 - **`PHP_VERSIONS_OS_RELEASE` / `NODE_VERSIONS_OS_RELEASE`** — pin the Debian base
-  (`bullseye`/`bookworm`) for a version (a version not listed defaults to bullseye).
+  (`bullseye`/`bookworm`) for a version. A PHP version not listed defaults to bookworm
+  (PHP 8.5 and later are not published on bullseye), a Node version to bullseye.
 - **`EOL_PHP_VERSIONS` / `EOL_NODE_VERSIONS` / `EXPERIMENTAL_PHP_VERSIONS`** — mark a
   version so a flaky build of it can't fail the run (it becomes `continue-on-error`).
 - **`NOT_STABLE_XDEBUG_PHP_VERSIONS`** — which versions get the non-stable Xdebug.
