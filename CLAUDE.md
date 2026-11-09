@@ -130,6 +130,13 @@ arches of a version carry **this run's** id. Incomplete or stale versions are sk
 and keep their previous image, and every skip is listed in the step summary. The merge
 runs even if some builds failed. No `latest` tag is created.
 
+The per-arch tags are also the hand-off **between layers**: each layer job builds `FROM` its
+parent's per-arch tag of the same leg (`PHP_VERSION=<version>-arch-<cache_suffix>`), never
+the parent's published multi-arch tag. A layer job `needs:` its parent's build job, so that
+tag is this run's image; the published tag is made by a merge job nothing waits for, so it
+would be the previous run's image, or missing altogether for a new PHP/Node version (a new
+version then took one daily run per layer to reach the bottom of the chain).
+
 Do **not** go back to workflow artifacts for the digest hand-off. A run lists only about
 its first 1000 artifacts. This matrix produces ~1350, so the last layers' digests were
 silently invisible to their merge jobs (2026-10-07). When adding a new layered image,

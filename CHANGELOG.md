@@ -27,11 +27,17 @@ summarised as the net result.
     release uses (`libssl1.1`, `libssl3` or `libssl3t64`), instead of `libssl1.1` by name.
 - **valkey:** new `ghcr.io/epartment/roll/valkey` image (`valkey/valkey` upstream, multi-arch),
   built for `8.0`, `8.1`, `9.0` and newer releases. The newest minor of each major is also
-  tagged `8` and `9`. A minor whose upstream tag still points at a release candidate (`9.2` in
-  November 2026) is skipped until its first final release.
+  tagged `8` and `9`, but only when the upstream tag listing succeeded, so a failed listing never
+  moves `:9` back to the pinned 9.0. A minor whose upstream tag still points at a release candidate
+  (`9.2` in November 2026) is skipped until its first final release.
 
 ### Fixed
 
+- **php-fpm (all layers):** each layer now builds `FROM` its parent's per-arch tag of the same run
+  instead of the published multi-arch tag, which a merge job publishes without anything waiting for
+  it. Layers were built on the previous run's parent, and a new PHP or Node version gained one layer
+  per daily run (PHP 8.5's Node builds would have failed on the first run, as `php-fpm:8.5` did not
+  exist yet).
 - **php-fpm (all layers):** the scheduled run of 2026-10-07 published no
   `php-fpm-magento2-debug` tags at all. The other layers' merges went green but silently
   skipped many 8.3/8.4 tags. Every build had succeeded. The cause: the run produced 1358

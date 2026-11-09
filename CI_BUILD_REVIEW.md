@@ -402,6 +402,15 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
   builds strictly top-down within one run. Alternatively, pass the parent by digest rather than by
   tag, which removes the dependency on a manifest existing at all.
 
+- *Update 2026-11-09:* **Fixed.** Every layer builds `FROM` its
+  parent's per-arch tag of this run (`<version>-arch-<x86|arm64>`, pushed by the parent build job the
+  layer already `needs:`), not the published multi-arch tag. The chain therefore builds top-down within
+  one run, which PHP 8.5 needs because none of its tags exist yet. The merge jobs and their
+  partial-failure handling are unchanged. If a parent leg fails, its per-arch tag is the previous
+  run's (or absent for a new version), which is the same staleness the published tag had. Verified
+  locally by building the node and magento2-debug layers `FROM` the published
+  `php-fpm:8.4-arch-arm64` and `php-fpm-magento2:8.4-node22-arch-arm64`; not yet confirmed in CI.
+
 <a id="m8"></a>
 **M8. Elasticsearch and OpenSearch plugin installs had no retry** — `elasticsearch/Dockerfile:5`, `opensearch/Dockerfile:4`
 
