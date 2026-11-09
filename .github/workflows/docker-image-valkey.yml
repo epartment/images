@@ -25,8 +25,10 @@ jobs:
   # - valkey/valkey publishes a `<major>.<minor>` tag while that minor is still a release
   #   candidate (`9.2` in Nov 2026), so a discovered minor only counts
   #   once a `<major>.<minor>.<patch>` tag without a suffix exists.
-  # - The newest selected minor of each major is also published as `:<major>` (`valkey:9`).
-  #   A manual `versions` run publishes only the exact tags it names, so it never moves `:<major>`.
+  # - The newest selected minor of each major is also published as `:<major>` (`valkey:9`), but
+  #   only when discovery listed released versions. A manual `versions` run, or a run whose tag
+  #   listing failed and fell back to PIN, publishes only the exact tags, so `:<major>` never
+  #   moves back to an older minor.
   discover:
     name: Discover Valkey versions
     runs-on: ubuntu-latest
@@ -46,6 +48,7 @@ jobs:
           OVERRIDE="${{ inputs.versions }}"
 
           MAXPIN=$(printf '%s\n' $PIN | sort -V | tail -1)
+          ALIASES="false"
           if [ -n "${OVERRIDE}" ]; then
             CAND=$(echo "$OVERRIDE" | tr ', ' '\n' | grep -v '^$' || true)
           else
@@ -53,6 +56,11 @@ jobs:
             # A minor is released once a plain <major>.<minor>.<patch> tag exists.
             DISCOVERED=$(echo "$TAGS" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
               | sed -E 's/\.[0-9]+$//' | sort -uV | paste -sd' ' - || true)
+            if [ -n "$DISCOVERED" ]; then
+              ALIASES="true"
+            else
+              echo "::warning::Tag listing for ${UPSTREAM} failed; building PIN without moving the :<major> aliases."
+            fi
             NEWER=""
             for v in $DISCOVERED; do
               [ "$v" = "$MAXPIN" ] && continue
@@ -75,12 +83,12 @@ jobs:
             echo 'build=false' >> "$GITHUB_OUTPUT"
           else
             # major_tag is set on the newest selected minor of each major (SEL is sorted
-            # ascending, so the last one per major wins), and left empty on manual runs.
-            MATRIX=$(printf '%s\n' $SEL | jq -R . | jq -cs --arg override "$OVERRIDE" '
+            # ascending, so the last one per major wins), and left empty when ALIASES is false.
+            MATRIX=$(printf '%s\n' $SEL | jq -R . | jq -cs --arg aliases "$ALIASES" '
               . as $all
               | {include: map(. as $v | ($v | split(".")[0]) as $major | {
                   version: $v,
-                  major_tag: (if $override == ""
+                  major_tag: (if $aliases == "true"
                                  and $v == ($all | map(select(split(".")[0] == $major)) | last)
                               then $major else "" end)
                 })}')
