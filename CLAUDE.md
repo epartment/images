@@ -18,7 +18,7 @@ workflow that builds it for `linux/amd64` + `linux/arm64` and publishes it to
 have been removed).
 
 Services: `php-fpm` (the complex one — see below), `nginx`, `varnish`,
-`mariadb`, `mysql`, `mongo`, `redis`, `dragonfly`, `elasticsearch`, `opensearch`,
+`mariadb`, `mysql`, `mongo`, `redis`, `valkey`, `dragonfly`, `elasticsearch`, `opensearch`,
 `rabbitmq`, `mailhog`, `dnsmasq`, `magepack`, `startpage`.
 
 ## How builds run (CI is the build system)

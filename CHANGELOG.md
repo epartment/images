@@ -25,6 +25,10 @@ summarised as the net result.
   - the `/bin/fish` link is skipped where `/bin` is merged into `/usr/bin` (bookworm);
   - the magento2 layer installs the OpenSSL runtime for mydumper/myloader under the name the
     release uses (`libssl1.1`, `libssl3` or `libssl3t64`), instead of `libssl1.1` by name.
+- **valkey:** new `ghcr.io/epartment/roll/valkey` image (`valkey/valkey` upstream, multi-arch),
+  built for `8.0`, `8.1`, `9.0` and newer releases. The newest minor of each major is also
+  tagged `8` and `9`. A minor whose upstream tag still points at a release candidate (`9.2` in
+  November 2026) is skipped until its first final release.
 
 ### Fixed
 

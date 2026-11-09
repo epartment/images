@@ -32,6 +32,7 @@ owner automatically (the namespace is derived from `github.repository_owner`).
 | `mysql` | `5.5`–`5.7` (legacy), `8.0`–`8.4`, `9.0`–`9.2` + newer (auto) |
 | `mongo` | `5`, `6`, `7` + newer (auto) |
 | `redis` | `5.0`, `6.0`, `6.2`, `7.0`, `7.2` + newer (auto) |
+| `valkey` | `8.0`, `8.1`, `9.0` + newer (auto); the newest minor of each major also as `8`, `9` |
 | `dragonfly` | `1.3`–`1.17` + newer (auto) |
 | `elasticsearch` | `7.17`, `8.4`, `8.6`, `8.11`–`8.13` + newer (auto) |
 | `opensearch` | `2.9`–`2.13`, `2.19`, `3.1`–`3.3` + newer (auto) |
@@ -130,7 +131,7 @@ the highest pinned one**, minus the deny-list, above the floor. So:
 - To guarantee a specific version builds, **add it to the pin**. To stop building
   one, **add it to the deny-list** (or raise the floor).
 
-### …for a simple service (redis, mysql, mariadb, mongo, nginx, elasticsearch, opensearch, varnish, dragonfly, rabbitmq)
+### …for a simple service (redis, valkey, mysql, mariadb, mongo, nginx, elasticsearch, opensearch, varnish, dragonfly, rabbitmq)
 
 Edit the `discover` job at the top of that service's
 `.github/workflows/docker-image-<service>.yml`. The knobs are plain shell variables:
@@ -266,7 +267,7 @@ php-fpm/            base + layered PHP-FPM images and the shared build context/
   context/          shared build context (entrypoint, php.d, profile.d)
   node/ xdebug3/ magento1/ magento2/ wordpress/   layer Dockerfiles
 nginx/              nginx image + per-framework vhost templates (available.d/)
-varnish/ mariadb/ mysql/ mongo/ redis/ dragonfly/ ...   one directory per service
+varnish/ mariadb/ mysql/ mongo/ redis/ valkey/ dragonfly/ ...   one directory per service
 .github/workflows/  one docker-image-*.yml per service + mirror-base-images.yml
 .github/workflows/php-matrix/   php-fpm version policy (constants.php) + matrix generators
 .trigger            no-op file; bump to force a rebuild
