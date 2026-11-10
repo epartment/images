@@ -18,6 +18,7 @@ foreach (php_versions() as $phpVersion) {
                 'php_os_release' => $phpOsRelease,
                 'node_version' => $nodeVersion,
                 'node_os_release' => $nodeOsRelease,
+                'node_gyp_python' => node_gyp_python($phpVersion, $nodeVersion),
                 'experimental' => $experimental,
                 'end_of_life' => $endOfLife,
                 // The workflow reads matrix.continue_on_error; without this key an EOL or

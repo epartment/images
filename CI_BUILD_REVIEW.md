@@ -158,6 +158,11 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
   still installed, and the magento2 layer builds on the published `php-fpm:8.4-node22` and picks
   `libssl1.1`. Flipping a bullseye version to bookworm is now a one-line change in
   `PHP_VERSIONS_OS_RELEASE` per version, plus a test build.
+- *Update 2026-11-10:* **Fixed for PHP 8.1 and later.** 8.1–8.4 moved to bookworm, as did Node 22
+  and every Node version not listed in `NODE_VERSIONS_OS_RELEASE`. A standalone Python 3.10 in the
+  bookworm base image keeps node-gyp 7 and older working (it fails on bookworm's Python 3.11).
+  7.3, 7.4 and 8.0 remain on the snapshot-pinned bullseye base of [H6](#h6); when that stops
+  working they can only move to `PHP_DENY_VERSIONS`.
 
 <a id="h4"></a>
 **H4. A daily scheduled build failed for 96 consecutive days without notifying anyone** — `.github/workflows/docker-image-php-fpm.yml:13-14`

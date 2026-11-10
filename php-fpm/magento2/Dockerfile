@@ -5,7 +5,7 @@ ARG PHP_VERSION
 # Build mydumper/myloader from source.
 #
 # Upstream ships no Debian "bullseye arm64" package, yet these images target
-# Debian bullseye (bookworm from PHP 8.5) on both linux/amd64 and linux/arm64, so a
+# Debian bullseye (PHP 7.3-8.0) or bookworm on both linux/amd64 and linux/arm64, so a
 # prebuilt .deb can't cover both arches. Building from source (the same way the
 # official Debian package is produced) works on either arch. Done in a throwaway
 # builder stage so the build toolchain never lands in the final image.
