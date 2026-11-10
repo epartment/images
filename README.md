@@ -161,8 +161,7 @@ const PHP_PIN_VERSIONS  = ['7.3', ..., '8.5'];    // always build (+ fallback)
 The same file also holds:
 
 - **`PHP_VERSIONS_OS_RELEASE` / `NODE_VERSIONS_OS_RELEASE`** — pin the Debian base
-  (`bullseye`/`bookworm`) for a version. A PHP version not listed defaults to bookworm
-  (PHP 8.5 and later are not published on bullseye), a Node version to bullseye.
+  (`bullseye`/`bookworm`) for a version. A version not listed defaults to bookworm.
 - **`EOL_PHP_VERSIONS` / `EOL_NODE_VERSIONS` / `EXPERIMENTAL_PHP_VERSIONS`** — mark a
   version so a flaky build of it can't fail the run (it becomes `continue-on-error`).
 - **`NOT_STABLE_XDEBUG_PHP_VERSIONS`** — which versions get the non-stable Xdebug.
@@ -177,6 +176,23 @@ php .github/workflows/php-matrix/full-generator.php | sed 's/^matrix=//' | jq
 
 To build a specific set on demand, run the **Docker Image PHP-FPM** workflow from the
 Actions tab and fill in the `php_versions` / `node_versions` inputs.
+
+#### Debian release per PHP version
+
+PHP 8.1 and later build on Debian bookworm. PHP 7.3, 7.4 and 8.0 stay on bullseye, because
+upstream publishes no newer base image for them (their bullseye base is frozen, and
+`php-fpm/context/apt-snapshot-bullseye-security` keeps its security suite installable). Node 22
+and later are copied from the bookworm Node images, older Node versions from the release listed in
+`NODE_VERSIONS_OS_RELEASE`; the php+node image only takes the Node binary, npm and Yarn from them,
+so the Node image's release does not have to match the PHP base.
+
+What a project sees on bookworm compared with bullseye: OpenSSL 3.0 (PHP's openssl offers no
+`rc4` and no `bf-cbc`), ICU 72, MariaDB client 10.11, Python 3.11 and no `python2`. node-gyp 7
+and older cannot run on Python 3.11, so the bookworm base image carries a standalone Python 3.10 in
+`/opt/python-node-gyp`, and the php+node images with Node below 18 point `NODE_GYP_FORCE_PYTHON` at
+it (`node_gyp_python()` in `constants.php`). That keeps node-sass 5 and 6 building from source;
+node-sass 4.x needs Python 2 and no longer builds on arm64, so such a project has to move to
+node-sass 6 or later.
 
 ## PHP-FPM: the layered image graph
 

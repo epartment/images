@@ -57,7 +57,7 @@ RUN ls -la /usr/local/bin/node \
     && ldd /usr/local/bin/node \
     && /usr/local/bin/node -v || echo "Node failed to run"
 
-# Python for node-gyp before version 9 (see /opt/python-node-gyp in the base image). Only node-gyp
+# Python for node-gyp 7 and older (see /opt/python-node-gyp in the base image). Only node-gyp
 # reads NODE_GYP_FORCE_PYTHON and an empty value behaves like unset; the matrix generator chooses
 # the value per PHP base release and Node version.
 ARG NODE_GYP_PYTHON=""

@@ -80,12 +80,12 @@ jobs:
           # floor) or it can't safely serve as the build base.
           PHP_FLOOR="7.3"
 
-          # Keep only versions >= PHP_FLOOR (uses `if`, so a non-match can't trip
-          # the runner's `set -e`).
+          # Keep only lines whose version (the part before the first "-") is >= PHP_FLOOR
+          # (uses `if`, so a non-match can't trip the runner's `set -e`).
           above_floor() {
             while read -r v; do
               [ -n "$v" ] || continue
-              if [ "$(printf '%s\n%s\n' "$PHP_FLOOR" "$v" | sort -V | head -n1)" = "$PHP_FLOOR" ]; then
+              if [ "$(printf '%s\n%s\n' "$PHP_FLOOR" "${v%%-*}" | sort -V | head -n1)" = "$PHP_FLOOR" ]; then
                 echo "$v"
               fi
             done
@@ -94,9 +94,10 @@ jobs:
           # Discover from Docker Hub. This is a single cheap tag listing; the
           # rate-limit-sensitive part is the per-arch BUILD pulls, which use the
           # mirror when it is complete (decided below).
-          DH_PHP_MM=$(crane ls php 2>/dev/null \
+          DH_PHP_TAGS=$(crane ls php 2>/dev/null \
             | grep -E '^[0-9]+\.[0-9]+-fpm-(bullseye|bookworm)$' \
-            | sed 's/-fpm-.*//' | sort -uV | above_floor || true)
+            | sort -uV | above_floor || true)
+          DH_PHP_MM=$(printf '%s\n' $DH_PHP_TAGS | sed 's/-fpm-.*//' | sort -uV)
           DH_NODE_MM=$(crane ls node 2>/dev/null \
             | grep -E '^[0-9]+-(bullseye|bookworm)$' | sed 's/-.*//' | sort -un || true)
 
@@ -107,15 +108,15 @@ jobs:
           if [ -n "${NODE_IN}" ]; then NODE_VERSIONS="${NODE_IN}"; else NODE_VERSIONS=$(echo "$DH_NODE_MM" | paste -sd, - || true); fi
 
           # Use the mirror as the php build base ONLY when it already contains
-          # every PHP major.minor Docker Hub offers above the floor. "Repo exists"
-          # is not enough: a partially-populated mirror (e.g. a previous run
-          # failed mid-way) would make some builds pull a missing base and fail.
+          # every PHP base tag (major.minor and Debian release) Docker Hub offers
+          # above the floor. "Repo exists" is not enough: a partially-populated
+          # mirror (e.g. one tag failed to copy) would make some builds pull a
+          # missing base and fail.
           REGISTRY_BASE=""
           if crane ls "${MIRROR}/php" >/dev/null 2>&1; then
-            MIRROR_PHP_MM=$(crane ls "${MIRROR}/php" 2>/dev/null \
-              | grep -E '^[0-9]+\.[0-9]+-fpm-(bullseye|bookworm)$' \
-              | sed 's/-fpm-.*//' | sort -uV || true)
-            MISSING=$(comm -23 <(printf '%s\n' $DH_PHP_MM | sort -u) <(printf '%s\n' $MIRROR_PHP_MM | sort -u))
+            MIRROR_PHP_TAGS=$(crane ls "${MIRROR}/php" 2>/dev/null \
+              | grep -E '^[0-9]+\.[0-9]+-fpm-(bullseye|bookworm)$' || true)
+            MISSING=$(comm -23 <(printf '%s\n' $DH_PHP_TAGS | sort -u) <(printf '%s\n' $MIRROR_PHP_TAGS | sort -u))
             if [ -z "$(echo $MISSING | tr -d '[:space:]')" ] && [ -n "$(echo $DH_PHP_MM | tr -d '[:space:]')" ]; then
               REGISTRY_BASE="${MIRROR}"
               echo "Mirror is complete; using ${MIRROR} as the php build base."
