@@ -5,10 +5,10 @@ ARG PHP_VERSION
 # Build mydumper/myloader from source.
 #
 # Upstream ships no Debian "bullseye arm64" package, yet these images target
-# Debian bullseye on both linux/amd64 and linux/arm64, so a prebuilt .deb can't
-# cover both arches. Building from source (the same way the official bullseye
-# package is produced) works on either arch. Done in a throwaway builder stage
-# so the build toolchain never lands in the final image.
+# Debian bullseye (bookworm from PHP 8.5) on both linux/amd64 and linux/arm64, so a
+# prebuilt .deb can't cover both arches. Building from source (the same way the
+# official Debian package is produced) works on either arch. Done in a throwaway
+# builder stage so the build toolchain never lands in the final image.
 # ---------------------------------------------------------------------------
 FROM ${ENV_SOURCE_IMAGE}:${PHP_VERSION} AS mydumper-builder
 USER root
@@ -43,12 +43,19 @@ RUN apt-snapshot-bullseye-security
 # Install the mydumper/myloader binaries built above plus their runtime libs.
 # `roll mydumper` / `roll myloader` (Magento 2 only) execute these inside the
 # php-fpm container.
+# The OpenSSL runtime package is named per Debian release (libssl1.1 on bullseye, libssl3 on
+# bookworm, libssl3t64 on trixie), so install whichever one this release offers.
 COPY --from=mydumper-builder /dist/usr/local/bin/mydumper /usr/local/bin/mydumper
 COPY --from=mydumper-builder /dist/usr/local/bin/myloader /usr/local/bin/myloader
 RUN set -eux; \
     apt-get update -y; \
+    libssl_pkg=""; \
+    for pkg in libssl3t64 libssl3 libssl1.1; do \
+        if apt-cache show "$pkg" 2>/dev/null | grep -q '^Version:'; then libssl_pkg="$pkg"; break; fi; \
+    done; \
+    [ -n "$libssl_pkg" ] || { echo "no libssl runtime package found"; exit 1; }; \
     apt-get install -y --no-install-recommends \
-        libglib2.0-0 libpcre2-8-0 zlib1g libssl1.1 libmariadb3 libatomic1; \
+        libglib2.0-0 libpcre2-8-0 zlib1g "$libssl_pkg" libmariadb3 libatomic1; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
     mydumper --version; \

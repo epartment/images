@@ -16,8 +16,9 @@
 //                   discovery is unavailable (running the generators locally, or
 //                   the registry being unreachable in CI).
 //   *_OS_RELEASE    Pin the Debian base (bullseye/bookworm/…) for a version.
-//                   This map is authoritative; a version not listed defaults to
-//                   bullseye.
+//                   This map is authoritative; a PHP version not listed defaults
+//                   to bookworm (upstream stopped publishing new PHP minors on
+//                   bullseye with 8.5), a Node version not listed to bullseye.
 //   EOL / EXPERIMENTAL / xdebug   Per-version build flags.
 //
 // HOW TO ADD OR CHANGE A VERSION (see README.md → "Adding or changing a version")
@@ -51,10 +52,7 @@ const ARCHES = [
 
 // ---- PHP --------------------------------------------------------------------
 const PHP_MIN_VERSION = '7.3';
-// 8.5 is excluded until the bookworm migration: upstream publishes php 8.5 only on bookworm,
-// and PHP_VERSIONS_OS_RELEASE forces bullseye, so `php:8.5-fpm-bullseye` does not resolve.
-// Moving it to bookworm first requires the magento2 layer to stop hardcoding libssl1.1.
-const PHP_DENY_VERSIONS = ['8.5'];
+const PHP_DENY_VERSIONS = [];
 // Built unconditionally + fallback list when discovery is unavailable.
 const PHP_PIN_VERSIONS = ['7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5'];
 
@@ -72,7 +70,8 @@ const PHP_VERSIONS_OS_RELEASE = [
     '8.2' => 'bullseye',
     '8.3' => 'bullseye',
     '8.4' => 'bullseye',
-    '8.5' => 'bullseye',
+    // Upstream publishes php 8.5 only on bookworm and later; `php:8.5-fpm-bullseye` does not exist.
+    '8.5' => 'bookworm',
 ];
 const NODE_VERSIONS_OS_RELEASE = [
     '10' => 'stretch',
@@ -184,10 +183,10 @@ function latest_version(array $versions): string
     return empty($versions) ? '' : end($versions);
 }
 
-/** Debian base for a PHP version: pinned map wins, else bullseye. */
+/** Debian base for a PHP version: pinned map wins, else bookworm (no new PHP minor ships on bullseye). */
 function php_os_release(string $phpVersion): string
 {
-    return PHP_VERSIONS_OS_RELEASE[$phpVersion] ?? 'bullseye';
+    return PHP_VERSIONS_OS_RELEASE[$phpVersion] ?? 'bookworm';
 }
 
 /** Debian base for a Node version: pinned map wins, else bullseye. */

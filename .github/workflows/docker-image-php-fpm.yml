@@ -279,9 +279,13 @@ jobs:
           file: php-fpm/node/Dockerfile
           context: php-fpm/context
           platforms: ${{ matrix.arch.docker_platform }}
+          # Build FROM the parent's per-arch tag of this run (pushed by the previous layer, which
+          # this job `needs:`), not its published multi-arch tag: that tag is created by a merge
+          # job nothing here waits for, so it is the previous run's image, or missing for a new
+          # PHP/Node version. Every layer below does the same.
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
-            PHP_VERSION=${{ matrix.php_version }}
+            PHP_VERSION=${{ matrix.php_version }}-arch-${{ matrix.arch.cache_suffix }}
             NODE_VERSION=${{ matrix.node_version }}
             OS_RELEASE=${{ matrix.node_os_release }}
           tags: ${{ env.REGISTRY_IMAGE }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
@@ -332,7 +336,7 @@ jobs:
           platforms: ${{ matrix.arch.docker_platform }}
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
-            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
+            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
             XDEBUG_TYPE=${{ matrix.xdebug_type }}
           tags: ${{ env.REGISTRY_XDEBUG }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
           labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
@@ -382,7 +386,7 @@ jobs:
           platforms: ${{ matrix.arch.docker_platform }}
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
-            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
+            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
           tags: ${{ env.REGISTRY_MAGENTO1 }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
           labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
           push: true
@@ -431,7 +435,7 @@ jobs:
           platforms: ${{ matrix.arch.docker_platform }}
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
-            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
+            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
           tags: ${{ env.REGISTRY_MAGENTO2 }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
           labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
           push: true
@@ -480,7 +484,7 @@ jobs:
           platforms: ${{ matrix.arch.docker_platform }}
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2
-            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
+            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
             XDEBUG_TYPE=${{ matrix.xdebug_type }}
           tags: ${{ env.REGISTRY_MAGENTO2_DEBUG }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
           labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
@@ -530,7 +534,7 @@ jobs:
           platforms: ${{ matrix.arch.docker_platform }}
           build-args: |
             ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
-            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}
+            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
           tags: ${{ env.REGISTRY_WORDPRESS }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
           labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
           push: true

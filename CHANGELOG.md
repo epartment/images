@@ -10,8 +10,34 @@ summarised as the net result.
 
 ## Unreleased
 
+### Added
+
+- **php-fpm 8.5:** PHP 8.5 builds again, for every layer and Node pairing (`php-fpm`,
+  `php-fpm-debug`, `php-fpm-magento1`, `php-fpm-magento2`, `php-fpm-magento2-debug`,
+  `php-fpm-wordpress`). Upstream publishes `php:8.5-fpm` only on bookworm, so 8.5 is the first
+  version on Debian bookworm. The older versions stay on bullseye. A PHP version missing from
+  `PHP_VERSIONS_OS_RELEASE` now defaults to bookworm instead of bullseye, so 8.6 and later no
+  longer point at a base tag that does not exist. Making the Dockerfiles work on both releases:
+  - `python2` is installed only where the release still has it (bookworm has none), and that
+    step now fails on a failed `apt-get install` instead of continuing without `python3-pip`;
+  - `pip install segno` sets `PIP_BREAK_SYSTEM_PACKAGES=1`, because bookworm's pip refuses
+    system-wide installs (PEP 668);
+  - the `/bin/fish` link is skipped where `/bin` is merged into `/usr/bin` (bookworm);
+  - the magento2 layer installs the OpenSSL runtime for mydumper/myloader under the name the
+    release uses (`libssl1.1`, `libssl3` or `libssl3t64`), instead of `libssl1.1` by name.
+- **valkey:** new `ghcr.io/epartment/roll/valkey` image (`valkey/valkey` upstream, multi-arch),
+  built for `8.0`, `8.1`, `9.0` and newer releases. The newest minor of each major is also
+  tagged `8` and `9`, but only when the upstream tag listing succeeded, so a failed listing never
+  moves `:9` back to the pinned 9.0. A minor whose upstream tag still points at a release candidate
+  (`9.2` in November 2026) is skipped until its first final release.
+
 ### Fixed
 
+- **php-fpm (all layers):** each layer now builds `FROM` its parent's per-arch tag of the same run
+  instead of the published multi-arch tag, which a merge job publishes without anything waiting for
+  it. Layers were built on the previous run's parent, and a new PHP or Node version gained one layer
+  per daily run (PHP 8.5's Node builds would have failed on the first run, as `php-fpm:8.5` did not
+  exist yet).
 - **php-fpm (all layers):** the scheduled run of 2026-10-07 published no
   `php-fpm-magento2-debug` tags at all. The other layers' merges went green but silently
   skipped many 8.3/8.4 tags. Every build had succeeded. The cause: the run produced 1358
