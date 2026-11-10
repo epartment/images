@@ -189,6 +189,20 @@ function php_os_release(string $phpVersion): string
     return PHP_VERSIONS_OS_RELEASE[$phpVersion] ?? 'bookworm';
 }
 
+// The standalone Python 3.10 the bookworm base image installs for node-gyp before version 9,
+// which cannot run on bookworm's Python 3.11. Node 18 and later bundle a node-gyp that can.
+const NODE_GYP_PYTHON_PATH = '/opt/python-node-gyp/bin/python3';
+const NODE_GYP_PYTHON_BELOW_NODE = '18';
+
+/** Value of NODE_GYP_FORCE_PYTHON for a PHP × Node image: the Python 3.10 path, or '' for none. */
+function node_gyp_python(string $phpVersion, string $nodeVersion): string
+{
+    return php_os_release($phpVersion) !== 'bullseye'
+        && version_compare($nodeVersion, NODE_GYP_PYTHON_BELOW_NODE, '<')
+        ? NODE_GYP_PYTHON_PATH
+        : '';
+}
+
 /** Debian base for a Node version: pinned map wins, else bullseye. */
 function node_os_release(string $nodeVersion): string
 {

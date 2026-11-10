@@ -143,6 +143,31 @@ RUN set -e; if [ "$(printf "7.1\n${PHP_VERSION}" | sort -g | head -n1 | awk -F".
     sed -i '/disable ghostscript format types/,+6d' /etc/ImageMagick-6/policy.xml; \
     if [ ! -f "/usr/bin/pip" ]; then ln -s /usr/bin/pip3 /usr/bin/pip; ln -s /usr/bin/python3 /usr/bin/python; fi; fi
 
+# node-gyp before version 9 (node-sass 5-7, npm's bundled node-gyp on Node < 18) cannot run on
+# Python 3.11, and bookworm ships no older Python. Install a checksum-pinned standalone CPython 3.10
+# for node-gyp only; the php+node image points NODE_GYP_FORCE_PYTHON at it. On bullseye (Python 3.9)
+# nothing is installed.
+ARG NODE_GYP_PYTHON_RELEASE="20261009"
+ARG NODE_GYP_PYTHON_VERSION="3.10.22"
+ARG NODE_GYP_PYTHON_SHA256_AARCH64="ad9fc572c8e67cae305de627433e3cb6d459cbe94711921d5b673766b5a20c72"
+ARG NODE_GYP_PYTHON_SHA256_X86_64="1780de9ddda04e956d2a4a0ad09b7f5667d92f4f12cd0881ec939de5d542903f"
+RUN set -eux; \
+    if python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then \
+      case "$(dpkg --print-architecture)" in \
+        arm64) py_arch="aarch64"; py_sha256="${NODE_GYP_PYTHON_SHA256_AARCH64}" ;; \
+        amd64) py_arch="x86_64"; py_sha256="${NODE_GYP_PYTHON_SHA256_X86_64}" ;; \
+        *) echo "No standalone Python for architecture $(dpkg --print-architecture)"; exit 1 ;; \
+      esac; \
+      py_tar="cpython-${NODE_GYP_PYTHON_VERSION}+${NODE_GYP_PYTHON_RELEASE}-${py_arch}-unknown-linux-gnu-install_only.tar.gz"; \
+      curl -fSL --retry 5 --retry-delay 5 --retry-all-errors -o "/tmp/${py_tar}" \
+        "https://github.com/astral-sh/python-build-standalone/releases/download/${NODE_GYP_PYTHON_RELEASE}/${py_tar}"; \
+      echo "${py_sha256}  /tmp/${py_tar}" | sha256sum -c -; \
+      mkdir -p /opt/python-node-gyp; \
+      tar -xzf "/tmp/${py_tar}" -C /opt/python-node-gyp --strip-components=1; \
+      rm "/tmp/${py_tar}"; \
+      /opt/python-node-gyp/bin/python3 --version; \
+    fi
+
 # If PHP >= 7.3
 RUN if [ "$(printf "7.3\n${PHP_VERSION}" | sort -g | head -n1 | awk -F"." '{print $1"."$2}')" = "7.3" ]; \
     then apt-get install -y --no-install-recommends bind9-utils; fi

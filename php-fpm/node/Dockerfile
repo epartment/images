@@ -57,6 +57,15 @@ RUN ls -la /usr/local/bin/node \
     && ldd /usr/local/bin/node \
     && /usr/local/bin/node -v || echo "Node failed to run"
 
+# Python for node-gyp before version 9 (see /opt/python-node-gyp in the base image). Only node-gyp
+# reads NODE_GYP_FORCE_PYTHON and an empty value behaves like unset; the matrix generator chooses
+# the value per PHP base release and Node version.
+ARG NODE_GYP_PYTHON=""
+ENV NODE_GYP_FORCE_PYTHON=${NODE_GYP_PYTHON}
+RUN if [ -n "${NODE_GYP_PYTHON}" ] && [ ! -x "${NODE_GYP_PYTHON}" ]; then \
+      echo "NODE_GYP_PYTHON=${NODE_GYP_PYTHON} is not executable in the source image"; exit 1; \
+    fi
+
 # Copy PhantomJS
 COPY --from=99designs/phantomjs:2.1.1 /usr/local/bin/phantomjs /usr/local/bin/phantomjs
 
