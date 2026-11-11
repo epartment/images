@@ -60,6 +60,10 @@ const NODE_MIN_VERSION = '10';
 const NODE_DENY_VERSIONS = [];
 const NODE_PIN_VERSIONS = ['10', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22'];
 
+// Node versions built per variant job. One Node version needs about 1.9 GB of builder disk
+// (all six variant images), and a GitHub runner has about 14 GB of disk.
+const NODE_CHUNK_SIZE = 3;
+
 // ---- Debian base pinning (authoritative; overrides discovery) ---------------
 const PHP_VERSIONS_OS_RELEASE = [
     // Upstream publishes no base newer than bullseye for 7.3, 7.4 and 8.0.
