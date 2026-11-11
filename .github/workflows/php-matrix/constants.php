@@ -16,9 +16,8 @@
 //                   discovery is unavailable (running the generators locally, or
 //                   the registry being unreachable in CI).
 //   *_OS_RELEASE    Pin the Debian base (bullseye/bookworm/…) for a version.
-//                   This map is authoritative; a PHP version not listed defaults
-//                   to bookworm (upstream stopped publishing new PHP minors on
-//                   bullseye with 8.5), a Node version not listed to bullseye.
+//                   This map is authoritative; a version not listed defaults
+//                   to bookworm.
 //   EOL / EXPERIMENTAL / xdebug   Per-version build flags.
 //
 // HOW TO ADD OR CHANGE A VERSION (see README.md → "Adding or changing a version")
@@ -61,16 +60,20 @@ const NODE_MIN_VERSION = '10';
 const NODE_DENY_VERSIONS = [];
 const NODE_PIN_VERSIONS = ['10', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22'];
 
+// Node versions built per variant job. One Node version needs about 1.9 GB of builder disk
+// (all six variant images), and a GitHub runner has about 14 GB of disk.
+const NODE_CHUNK_SIZE = 3;
+
 // ---- Debian base pinning (authoritative; overrides discovery) ---------------
 const PHP_VERSIONS_OS_RELEASE = [
+    // Upstream publishes no base newer than bullseye for 7.3, 7.4 and 8.0.
     '7.3' => 'bullseye',
     '7.4' => 'bullseye',
     '8.0' => 'bullseye',
-    '8.1' => 'bullseye',
-    '8.2' => 'bullseye',
-    '8.3' => 'bullseye',
-    '8.4' => 'bullseye',
-    // Upstream publishes php 8.5 only on bookworm and later; `php:8.5-fpm-bullseye` does not exist.
+    '8.1' => 'bookworm',
+    '8.2' => 'bookworm',
+    '8.3' => 'bookworm',
+    '8.4' => 'bookworm',
     '8.5' => 'bookworm',
 ];
 const NODE_VERSIONS_OS_RELEASE = [
@@ -85,7 +88,7 @@ const NODE_VERSIONS_OS_RELEASE = [
     '19' => 'bullseye',
     '20' => 'bullseye',
     '21' => 'bullseye',
-    '22' => 'bullseye',
+    '22' => 'bookworm',
 ];
 
 // ---- Build flags ------------------------------------------------------------
@@ -183,14 +186,46 @@ function latest_version(array $versions): string
     return empty($versions) ? '' : end($versions);
 }
 
-/** Debian base for a PHP version: pinned map wins, else bookworm (no new PHP minor ships on bullseye). */
+/** Xdebug flavour install-php-extensions builds for a PHP version. */
+function xdebug_type(string $phpVersion): string
+{
+    return in_array($phpVersion, NOT_STABLE_XDEBUG_PHP_VERSIONS, true) ? 'xdebug' : 'xdebug-stable';
+}
+
+/** Whether a failing build of this PHP version may not fail the run (EOL or experimental). */
+function php_continue_on_error(string $phpVersion): bool
+{
+    return in_array($phpVersion, EOL_PHP_VERSIONS, true) || in_array($phpVersion, EXPERIMENTAL_PHP_VERSIONS, true);
+}
+
+function node_is_eol(string $nodeVersion): bool
+{
+    return in_array($nodeVersion, EOL_NODE_VERSIONS, true);
+}
+
+/** Debian base for a PHP version: pinned map wins, else bookworm. */
 function php_os_release(string $phpVersion): string
 {
     return PHP_VERSIONS_OS_RELEASE[$phpVersion] ?? 'bookworm';
 }
 
-/** Debian base for a Node version: pinned map wins, else bullseye. */
+// The standalone Python 3.10 the bookworm base image installs for node-gyp 7 and older, which
+// cannot run on bookworm's Python 3.11. Node 18 and later bundle a newer node-gyp, and the
+// node-sass releases that support them (8 and later) depend on one.
+const NODE_GYP_PYTHON_PATH = '/opt/python-node-gyp/bin/python3';
+const NODE_GYP_PYTHON_BELOW_NODE = '18';
+
+/** Value of NODE_GYP_FORCE_PYTHON for a PHP × Node image: the Python 3.10 path, or '' for none. */
+function node_gyp_python(string $phpVersion, string $nodeVersion): string
+{
+    return php_os_release($phpVersion) !== 'bullseye'
+        && version_compare($nodeVersion, NODE_GYP_PYTHON_BELOW_NODE, '<')
+        ? NODE_GYP_PYTHON_PATH
+        : '';
+}
+
+/** Debian base for a Node version: pinned map wins, else bookworm. */
 function node_os_release(string $nodeVersion): string
 {
-    return NODE_VERSIONS_OS_RELEASE[$nodeVersion] ?? 'bullseye';
+    return NODE_VERSIONS_OS_RELEASE[$nodeVersion] ?? 'bookworm';
 }

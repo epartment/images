@@ -158,6 +158,11 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
   still installed, and the magento2 layer builds on the published `php-fpm:8.4-node22` and picks
   `libssl1.1`. Flipping a bullseye version to bookworm is now a one-line change in
   `PHP_VERSIONS_OS_RELEASE` per version, plus a test build.
+- *Update 2026-11-10:* **Fixed for PHP 8.1 and later.** 8.1–8.4 moved to bookworm, as did Node 22
+  and every Node version not listed in `NODE_VERSIONS_OS_RELEASE`. A standalone Python 3.10 in the
+  bookworm base image keeps node-gyp 7 and older working (it fails on bookworm's Python 3.11).
+  7.3, 7.4 and 8.0 remain on the snapshot-pinned bullseye base of [H6](#h6); when that stops
+  working they can only move to `PHP_DENY_VERSIONS`.
 
 <a id="h4"></a>
 **H4. A daily scheduled build failed for 96 consecutive days without notifying anyone** — `.github/workflows/docker-image-php-fpm.yml:13-14`
@@ -308,6 +313,10 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
 - *Suggested fix:* Prune the cross product to supported pairs — a per-PHP minimum/maximum Node range
   in `constants.php` would remove most of the matrix. Once the job count is realistic, raise
   `max-parallel` accordingly.
+- *Update 2026-11-11:* **Fixed for the throttle.** The php-fpm workflow no longer uses `max-parallel`.
+  The ~1370 per-combination jobs became 16 `base` jobs (PHP x arch) and 80 to 96 `variants` jobs
+  (PHP x arch x chunk of up to three Node versions), so the matrix runs unthrottled at a realistic
+  size. The unsupported PHP and Node pairs are still built; pruning them is not part of this change.
 
 <a id="m3"></a>
 **M3. BuildKit is pinned to a 2022 release in every build job** — `.github/workflows/docker-image-php-fpm.yml:204,268,333,398,462,526,591`
@@ -325,6 +334,9 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
 - *Suggested fix:* Drop the `driver-opts` block and let `docker/setup-buildx-action@v3` select its
   default BuildKit; if a regression appears, pin forward to a recent tag with a comment stating the
   reason.
+- *Update 2026-11-11:* **Fixed.** The `driver-opts: image=moby/buildkit:v0.10.6` pin is gone, along
+  with the per-layer `docker/build-push-action` jobs. Builds run through `docker buildx bake` on the
+  default BuildKit selected by `docker/setup-buildx-action`.
 
 <a id="m4"></a>
 **M4. `--platform=$BUILDPLATFORM` on the final stage builds for the builder, not the target** — `php-fpm/Dockerfile:8`
