@@ -186,6 +186,23 @@ function latest_version(array $versions): string
     return empty($versions) ? '' : end($versions);
 }
 
+/** Xdebug flavour install-php-extensions builds for a PHP version. */
+function xdebug_type(string $phpVersion): string
+{
+    return in_array($phpVersion, NOT_STABLE_XDEBUG_PHP_VERSIONS, true) ? 'xdebug' : 'xdebug-stable';
+}
+
+/** Whether a failing build of this PHP version may not fail the run (EOL or experimental). */
+function php_continue_on_error(string $phpVersion): bool
+{
+    return in_array($phpVersion, EOL_PHP_VERSIONS, true) || in_array($phpVersion, EXPERIMENTAL_PHP_VERSIONS, true);
+}
+
+function node_is_eol(string $nodeVersion): bool
+{
+    return in_array($nodeVersion, EOL_NODE_VERSIONS, true);
+}
+
 /** Debian base for a PHP version: pinned map wins, else bookworm. */
 function php_os_release(string $phpVersion): string
 {

@@ -68,14 +68,21 @@ variable "TOOLS_CONTEXT" {
 variable "BASE_CACHE_REF" {
   default = ""
 }
+# Label names; CI sets both in the workflow env, which is their single definition.
+variable "PER_ARCH_RUN_LABEL" {
+  default = "org.epartment.roll.ci-run-id"
+}
+variable "FINGERPRINT_LABEL" {
+  default = "org.epartment.roll.source-fingerprint"
+}
 
 # The run-id label lets merge-per-arch-tags.sh publish only this run's per-arch tags; the
 # fingerprint label lets the next run skip an image whose inputs did not change.
 function "roll_labels" {
   params = [fingerprint]
   result = {
-    "org.epartment.roll.ci-run-id"         = RUN_ID
-    "org.epartment.roll.source-fingerprint" = fingerprint
+    "${PER_ARCH_RUN_LABEL}" = RUN_ID
+    "${FINGERPRINT_LABEL}"  = fingerprint
   }
 }
 
@@ -84,9 +91,10 @@ function "node_fingerprint" {
   result = lookup(jsondecode(NODE_FINGERPRINTS), node_version, "")
 }
 
+# Registry cache entries for a target; ref_suffix tells the tools cache apart from the base cache.
 function "registry_cache" {
-  params = [ref, mode]
-  result = ref == "" ? [] : ["type=registry,ref=${ref}${mode}"]
+  params = [ref_suffix, mode]
+  result = BASE_CACHE_REF == "" ? [] : ["type=registry,ref=${BASE_CACHE_REF}${ref_suffix}${mode}"]
 }
 
 group "default" {
@@ -125,8 +133,8 @@ target "base" {
   }
   labels     = roll_labels(BASE_FINGERPRINT)
   tags       = ["${REGISTRY}/php-fpm:${PHP_VERSION}-arch-${ARCH_SUFFIX}"]
-  cache-from = registry_cache(BASE_CACHE_REF, "")
-  cache-to   = registry_cache(BASE_CACHE_REF, ",mode=max")
+  cache-from = registry_cache("", "")
+  cache-to   = registry_cache("", ",mode=max")
 }
 
 target "tools" {
@@ -140,8 +148,8 @@ target "tools" {
   }
   labels     = roll_labels(BASE_FINGERPRINT)
   tags       = ["${REGISTRY}/php-fpm:${PHP_VERSION}-tools-arch-${ARCH_SUFFIX}"]
-  cache-from = registry_cache(BASE_CACHE_REF == "" ? "" : "${BASE_CACHE_REF}-tools", "")
-  cache-to   = registry_cache(BASE_CACHE_REF == "" ? "" : "${BASE_CACHE_REF}-tools", ",mode=max")
+  cache-from = registry_cache("-tools", "")
+  cache-to   = registry_cache("-tools", ",mode=max")
 }
 
 target "node" {

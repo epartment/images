@@ -28,12 +28,13 @@ set -uo pipefail
 : "${REGISTRY:?}" "${RUN_ID:?}" "${CHUNK_NODES:?}"
 PUSH="${PUSH:-false}"
 MIN_FREE_GB="${MIN_FREE_GB:-6}"
-FINGERPRINT_LABEL="org.epartment.roll.source-fingerprint"
-RUN_ID_LABEL="org.epartment.roll.ci-run-id"
+FINGERPRINT_LABEL="${FINGERPRINT_LABEL:-org.epartment.roll.source-fingerprint}"
+PER_ARCH_RUN_LABEL="${PER_ARCH_RUN_LABEL:-org.epartment.roll.ci-run-id}"
+COLLECT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/collect-registry-state.sh"
 BAKE_FILE="php-fpm/docker-bake.hcl"
 BASE_TAG="${REGISTRY}/php-fpm:${PHP_VERSION}-arch-${ARCH_SUFFIX}"
 TOOLS_TAG="${REGISTRY}/php-fpm:${PHP_VERSION}-tools-arch-${ARCH_SUFFIX}"
-export PHP_VERSION PHP_OS_RELEASE XDEBUG_TYPE ARCH_SUFFIX REGISTRY RUN_ID PUSH
+export PHP_VERSION PHP_OS_RELEASE XDEBUG_TYPE ARCH_SUFFIX REGISTRY RUN_ID PUSH FINGERPRINT_LABEL PER_ARCH_RUN_LABEL
 
 builder_args=()
 if [ -n "${BUILDER:-}" ]; then
@@ -42,33 +43,17 @@ fi
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 
-# Prints "<fingerprint> <run-id>" of a pushed tag, "-" for a value that cannot be read.
-read_labels() {
-  local json
-  if ! json=$(docker buildx imagetools inspect "$1" --format '{{json .}}' 2>/dev/null); then
-    echo "- -"
-    return
-  fi
-  jq -r --arg fingerprint "$FINGERPRINT_LABEL" --arg run "$RUN_ID_LABEL" '
-    .image as $image
-    | ($image | if has("config") then [.] else [.[]] end) as $configs
-    | [$fingerprint, $run]
-    | map(. as $key
-        | $configs
-        | map(.config.Labels[$key] // empty)
-        | unique
-        | if length == 1 then .[0] else "-" end)
-    | join(" ")
-  ' <<<"$json" 2>/dev/null || echo "- -"
+# Value of one label of a pushed tag ("-" when it cannot be read), read through the registry
+# state collector so the lookup gets the plan job's retries and multi-platform rule.
+read_label() {
+  printf 'published\t%s\n' "$2" | FINGERPRINT_LABEL="$1" "$COLLECT" | cut -f3
 }
 
-# Succeeds when the tag carries the expected fingerprint and, for a base built in this
-# run, this run's id.
+# Succeeds when the tag carries the expected fingerprint and, for a base built in this run,
+# this run's id.
 base_tag_usable() {
-  local fingerprint run
-  read -r fingerprint run < <(read_labels "$1")
-  [ "$fingerprint" = "${BASE_FINGERPRINT}" ] || return 1
-  [ "${BASE_BUILT}" != "true" ] || [ "$run" = "$RUN_ID" ]
+  [ "$(read_label "$FINGERPRINT_LABEL" "$1")" = "${BASE_FINGERPRINT}" ] || return 1
+  [ "${BASE_BUILT}" != "true" ] || [ "$(read_label "$PER_ARCH_RUN_LABEL" "$1")" = "$RUN_ID" ]
 }
 
 free_gb_on_root() {

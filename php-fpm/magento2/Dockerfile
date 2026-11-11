@@ -4,8 +4,8 @@ ARG PHP_VERSION
 FROM ${ENV_SOURCE_IMAGE}:${PHP_VERSION}
 USER root
 
-# The source image may predate the bullseye-security fix in the base layer (layers build on the
-# previously published tag), so apply it here too before touching apt.
+# The base layer already applies the bullseye-security fix; repeating it (a no-op there) keeps this
+# layer safe on any parent that predates it.
 COPY apt-snapshot-bullseye-security /usr/local/bin/apt-snapshot-bullseye-security
 RUN apt-snapshot-bullseye-security
 

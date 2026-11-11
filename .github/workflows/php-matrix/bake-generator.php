@@ -26,11 +26,6 @@ function node_upstream_ref(string $nodeVersion): string
     return 'node:' . $nodeVersion . '-' . node_os_release($nodeVersion);
 }
 
-function xdebug_type(string $phpVersion): string
-{
-    return in_array($phpVersion, NOT_STABLE_XDEBUG_PHP_VERSIONS, true) ? 'xdebug' : 'xdebug-stable';
-}
-
 function registry_image(string $image, string $tag): string
 {
     return env_string('REGISTRY', DEFAULT_REGISTRY) . '/' . $image . ':' . $tag;
@@ -39,6 +34,17 @@ function registry_image(string $image, string $tag): string
 function tools_ref(string $phpVersion, array $arch): string
 {
     return registry_image('php-fpm', $phpVersion . '-tools-arch-' . $arch['cache_suffix']);
+}
+
+/** The published base tag and the per-arch tools tags whose labels decide whether the base is unchanged. */
+function base_published_refs(string $phpVersion): array
+{
+    $refs = [registry_image('php-fpm', $phpVersion)];
+    foreach (ARCHES as $arch) {
+        $refs[] = tools_ref($phpVersion, $arch);
+    }
+
+    return $refs;
 }
 
 /** Every image tag of one PHP x Node combination whose fingerprint label is compared. */
@@ -59,9 +65,8 @@ function registry_refs(array $phpVersions, array $nodeVersions): array
     }
     foreach ($phpVersions as $phpVersion) {
         $refs[] = ['upstream', php_upstream_ref($phpVersion)];
-        $refs[] = ['published', registry_image('php-fpm', $phpVersion)];
-        foreach (ARCHES as $arch) {
-            $refs[] = ['published', tools_ref($phpVersion, $arch)];
+        foreach (base_published_refs($phpVersion) as $ref) {
+            $refs[] = ['published', $ref];
         }
         foreach ($nodeVersions as $nodeVersion) {
             foreach (node_published_refs($phpVersion, $nodeVersion) as $ref) {
@@ -140,11 +145,6 @@ function parse_state(string $input): array
     return $state;
 }
 
-function php_continue_on_error(string $phpVersion): bool
-{
-    return in_array($phpVersion, EOL_PHP_VERSIONS, true) || in_array($phpVersion, EXPERIMENTAL_PHP_VERSIONS, true);
-}
-
 /** Node versions that need building, split into EOL and supported groups, each in chunks of NODE_CHUNK_SIZE. */
 function node_chunks(array $nodesToBuild): array
 {
@@ -152,7 +152,7 @@ function node_chunks(array $nodesToBuild): array
     foreach ([true, false] as $eol) {
         $group = array_values(array_filter(
             $nodesToBuild,
-            static fn(array $node): bool => in_array($node['v'], EOL_NODE_VERSIONS, true) === $eol
+            static fn(array $node): bool => node_is_eol($node['v']) === $eol
         ));
         foreach (array_chunk($group, NODE_CHUNK_SIZE) as $chunk) {
             $chunks[] = ['eol' => $eol, 'nodes' => $chunk];
@@ -182,11 +182,7 @@ function build_plan(array $state, array $phpVersions, array $nodeVersions): arra
     foreach ($phpVersions as $phpVersion) {
         $baseInputs = base_inputs($state, $phpVersion, $common);
         $baseFingerprint = fingerprint($baseInputs, $runId);
-        $baseRefs = [registry_image('php-fpm', $phpVersion)];
-        foreach (ARCHES as $arch) {
-            $baseRefs[] = tools_ref($phpVersion, $arch);
-        }
-        $baseBuilt = $force || !all_labelled($state, $baseRefs, $baseFingerprint);
+        $baseBuilt = $force || !all_labelled($state, base_published_refs($phpVersion), $baseFingerprint);
 
         $nodesToBuild = [];
         foreach ($nodeVersions as $nodeVersion) {
@@ -201,24 +197,24 @@ function build_plan(array $state, array $phpVersions, array $nodeVersions): arra
             }
         }
 
+        $phpFields = [
+            'php_version' => $phpVersion,
+            'php_os_release' => php_os_release($phpVersion),
+            'xdebug_type' => xdebug_type($phpVersion),
+        ];
+        $chunksToBuild = node_chunks($nodesToBuild);
         foreach (ARCHES as $arch) {
             $suffix = $arch['cache_suffix'];
             if ($baseBuilt) {
-                $base[] = [
-                    'php_version' => $phpVersion,
-                    'php_os_release' => php_os_release($phpVersion),
-                    'xdebug_type' => xdebug_type($phpVersion),
+                $base[] = $phpFields + [
                     'fingerprint' => $baseFingerprint,
                     'continue_on_error' => php_continue_on_error($phpVersion),
                     'arch' => $arch,
                 ];
                 $expected['php-fpm'][] = $phpVersion . ' ' . $suffix;
             }
-            foreach (node_chunks($nodesToBuild) as $chunk) {
-                $chunks[] = [
-                    'php_version' => $phpVersion,
-                    'php_os_release' => php_os_release($phpVersion),
-                    'xdebug_type' => xdebug_type($phpVersion),
+            foreach ($chunksToBuild as $chunk) {
+                $chunks[] = $phpFields + [
                     'base_fingerprint' => $baseFingerprint,
                     'base_built' => $baseBuilt,
                     'chunk' => chunk_label($chunk['nodes']),
@@ -274,6 +270,7 @@ function run_matrix(): int
     echo 'base=' . json_list($plan['base']) . "\n";
     echo 'chunks=' . json_list($plan['chunks']) . "\n";
     echo 'expected=' . json_encode((object) $plan['expected'], JSON_UNESCAPED_SLASHES) . "\n";
+    echo 'images=' . json_list(array_keys($plan['expected'])) . "\n";
     echo 'has_base=' . ($plan['base'] === [] ? 'false' : 'true') . "\n";
     echo 'has_chunks=' . ($plan['chunks'] === [] ? 'false' : 'true') . "\n";
     fwrite(STDERR, implode("\n", $plan['summary']) . "\n");

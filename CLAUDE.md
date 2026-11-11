@@ -44,8 +44,8 @@ versions to build, then a **build matrix** builds each version as an independent
 `docker-image-php-fpm.yml` has five stages: `discover` (master gate, resolves versions) →
 `plan` (fingerprints, decides what to build) → `base` (one job per PHP × arch) → `variants`
 (one job per PHP × arch × chunk of up to `NODE_CHUNK_SIZE` = 3 Node versions) → `merge` (one
-leg per image, six). It builds with `docker buildx bake` (`php-fpm/docker-bake.hcl`), about
-16 + 80–96 + 6 jobs instead of ~1370. A run where nothing changed ends after `plan`.
+leg per image with something to publish, at most six). It builds with `docker buildx bake` (`php-fpm/docker-bake.hcl`), about
+16 + 80–96 + up to 6 jobs instead of ~1370. A run where nothing changed ends after `plan`.
 
 **Robustness invariants to preserve when editing workflows:**
 - Matrix jobs are independent (`fail-fast: false`) — never introduce a shared

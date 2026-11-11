@@ -57,7 +57,7 @@ summarised as the net result.
 - **php-fpm (build pipeline):** the workflow builds with `docker buildx bake`
   (`php-fpm/docker-bake.hcl`) in five jobs, `discover` → `plan` → `base` → `variants` → `merge`,
   instead of one job per PHP × Node × arch × layer. Same images and tags, about 16 `base` jobs,
-  80 to 96 `variants` jobs and 6 `merge` jobs instead of about 1370 jobs (96 with the Node versions
+  80 to 96 `variants` jobs and up to 6 `merge` jobs instead of about 1370 jobs (96 with the Node versions
   discovered on 2026-11-11; CI run time not yet measured):
   - the new `tools` image (`php-fpm/tools/Dockerfile`) compiles mydumper/myloader and the Xdebug
     module once per PHP version instead of once per Node version, and the `base` job pushes it as
@@ -72,8 +72,9 @@ summarised as the net result.
     counts as changed. A run with nothing changed ends after `plan`;
   - manual runs get `force` (default on: build even when unchanged) and `no_cache` inputs next to
     `php_versions` and `node_versions`;
-  - the six copy-pasted merge jobs became one `merge` job with a leg per image, fed by the plan's
-    list of expected versions; the publish rule of `merge-per-arch-tags.sh` is unchanged;
+  - the six copy-pasted merge jobs became one `merge` job with a leg per image that has something
+    to publish, fed by the plan's list of expected versions; the publish rule of
+    `merge-per-arch-tags.sh` is unchanged;
   - `php-fpm/xdebug3/Dockerfile` now builds both `php-fpm-debug` and `php-fpm-magento2-debug`,
     copies the Xdebug module from the tools image and fails the build when `php -m` lacks xdebug;
   - the QEMU setup, the `moby/buildkit:v0.10.6` pin and `max-parallel` are gone.

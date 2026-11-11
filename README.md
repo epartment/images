@@ -87,7 +87,7 @@ discover ──▶ plan ──▶ base ──▶ variants ──▶ merge
 | `plan` | Computes a fingerprint of each image's inputs, compares it with the label on the published image and emits the matrix of what has to be built. A run with nothing changed ends here. |
 | `base` | One job per PHP version × architecture: builds the `php-fpm` base image and the `tools` image. |
 | `variants` | One job per PHP version × architecture × chunk of up to three Node versions: builds the Node image and every variant on top of the base. |
-| `merge` | One leg per image: assembles the multi-arch tags. |
+| `merge` | One leg per image that has something to publish: assembles the multi-arch tags. |
 
 ### Robustness: one failure can't block the rest
 
@@ -356,7 +356,8 @@ built it). The script refuses to build on a base whose labels do not match the p
 that should have been built in this run but is missing only logs a warning and builds nothing,
 and a reused base without the planned fingerprint is an error.
 
-The `merge` job has one leg per image (six). Each leg runs
+The `merge` job has one leg per image that has something to publish (at most six, from the
+plan's `images` list). Each leg runs
 `.github/scripts/merge-per-arch-tags.sh` over the versions the plan expects. For each version
 the script:
 
@@ -374,7 +375,7 @@ the daily build waits for it to finish rather than overwriting its tags halfway.
 The hand-off deliberately does **not** use workflow artifacts. A run lists only about
 its first 1000 artifacts, and the previous layout produced well over 1000 jobs. Every digest
 past that cutoff was silently invisible to the merge jobs. The current layout is 16 `base`,
-80 to 96 `variants` and 6 `merge` jobs (plus `discover` and `plan`).
+80 to 96 `variants` and up to 6 `merge` jobs (plus `discover` and `plan`).
 
 #### Skipping unchanged images
 
