@@ -38,19 +38,11 @@ updates:
     schedule:
       interval: "daily"
   - package-ecosystem: "docker"
-    directory: "/php-fpm/magento2/xdebug3"
-    schedule:
-      interval: "daily"
-  - package-ecosystem: "docker"
     directory: "/php-fpm/magento2/blackfire"
     schedule:
       interval: "daily"
   - package-ecosystem: "docker"
     directory: "/php-fpm/magento1"
-    schedule:
-      interval: "daily"
-  - package-ecosystem: "docker"
-    directory: "/php-fpm/magento1/xdebug3"
     schedule:
       interval: "daily"
   - package-ecosystem: "docker"

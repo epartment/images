@@ -1,37 +1,6 @@
 ARG ENV_SOURCE_IMAGE
 ARG PHP_VERSION
 
-# ---------------------------------------------------------------------------
-# Build mydumper/myloader from source.
-#
-# Upstream ships no Debian "bullseye arm64" package, yet these images target
-# Debian bullseye (PHP 7.3-8.0) or bookworm on both linux/amd64 and linux/arm64, so a
-# prebuilt .deb can't cover both arches. Building from source (the same way the
-# official Debian package is produced) works on either arch. Done in a throwaway
-# builder stage so the build toolchain never lands in the final image.
-# ---------------------------------------------------------------------------
-FROM ${ENV_SOURCE_IMAGE}:${PHP_VERSION} AS mydumper-builder
-USER root
-# The source image may predate the bullseye-security fix in the base layer (layers build on the
-# previously published tag), so apply it here too before touching apt.
-COPY apt-snapshot-bullseye-security /usr/local/bin/apt-snapshot-bullseye-security
-RUN apt-snapshot-bullseye-security
-ARG MYDUMPER_VERSION=1.0.1-3
-RUN set -eux; \
-    apt-get update -y; \
-    apt-get install -y --no-install-recommends \
-        cmake g++ make git pkg-config \
-        libglib2.0-dev libpcre2-dev zlib1g-dev libssl-dev \
-        libmariadb-dev libmariadb-dev-compat; \
-    git clone --depth 1 --branch "v${MYDUMPER_VERSION}" https://github.com/mydumper/mydumper.git /tmp/mydumper; \
-    cd /tmp/mydumper; \
-    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local .; \
-    make -j"$(nproc)"; \
-    make install DESTDIR=/dist
-
-# ---------------------------------------------------------------------------
-ARG ENV_SOURCE_IMAGE
-ARG PHP_VERSION
 FROM ${ENV_SOURCE_IMAGE}:${PHP_VERSION}
 USER root
 
@@ -40,13 +9,14 @@ USER root
 COPY apt-snapshot-bullseye-security /usr/local/bin/apt-snapshot-bullseye-security
 RUN apt-snapshot-bullseye-security
 
-# Install the mydumper/myloader binaries built above plus their runtime libs.
-# `roll mydumper` / `roll myloader` (Magento 2 only) execute these inside the
-# php-fpm container.
+# Install the mydumper/myloader binaries plus their runtime libs. They are compiled once per PHP
+# version and architecture in php-fpm/tools/Dockerfile and reach this build through the named
+# context `roll-tools`, so build this file through php-fpm/docker-bake.hcl. `roll mydumper` /
+# `roll myloader` (Magento 2 only) execute them inside the php-fpm container.
 # The OpenSSL runtime package is named per Debian release (libssl1.1 on bullseye, libssl3 on
 # bookworm, libssl3t64 on trixie), so install whichever one this release offers.
-COPY --from=mydumper-builder /dist/usr/local/bin/mydumper /usr/local/bin/mydumper
-COPY --from=mydumper-builder /dist/usr/local/bin/myloader /usr/local/bin/myloader
+COPY --from=roll-tools /dist/usr/local/bin/mydumper /usr/local/bin/mydumper
+COPY --from=roll-tools /dist/usr/local/bin/myloader /usr/local/bin/myloader
 RUN set -eux; \
     apt-get update -y; \
     libssl_pkg=""; \
