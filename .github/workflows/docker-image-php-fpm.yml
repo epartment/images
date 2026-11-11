@@ -10,6 +10,16 @@ on:
         description: 'Node versions to build (comma-separated). Leave empty to auto-discover from the registry.'
         required: false
         type: string
+      force:
+        description: 'Build every selected image, also when its inputs did not change since it was published.'
+        required: false
+        type: boolean
+        default: true
+      no_cache:
+        description: 'Build the base images without the registry cache (scheduled runs always do).'
+        required: false
+        type: boolean
+        default: false
   schedule:
     - cron: "0 6 * * *"   # 6 AM daily
   push:
@@ -18,21 +28,18 @@ on:
       - php-fpm/**
       - .github/workflows/*php-fpm*
       - .github/workflows/php-matrix/**
-      - .github/scripts/merge-per-arch-tags.sh
+      - .github/scripts/**
     branches:
       - master
 
 env:
-  REGISTRY_IMAGE: ghcr.io/epartment/roll/php-fpm
-  REGISTRY_XDEBUG: ghcr.io/epartment/roll/php-fpm-debug
-  REGISTRY_MAGENTO1: ghcr.io/epartment/roll/php-fpm-magento1
-  REGISTRY_MAGENTO2: ghcr.io/epartment/roll/php-fpm-magento2
-  REGISTRY_MAGENTO2_DEBUG: ghcr.io/epartment/roll/php-fpm-magento2-debug
-  REGISTRY_WORDPRESS: ghcr.io/epartment/roll/php-fpm-wordpress
-  # Every build leg pushes <image>:<version>-arch-<suffix> with this label set to
-  # the run id; the merge jobs publish a version only when all its arch tags carry
-  # this run's id (see .github/scripts/merge-per-arch-tags.sh).
+  # Every build pushes <image>:<version>-arch-<suffix> with this label set to the run id; the
+  # merge job publishes a version only when all its arch tags carry this run's id (see
+  # .github/scripts/merge-per-arch-tags.sh).
   PER_ARCH_RUN_LABEL: org.epartment.roll.ci-run-id
+  # Every build also labels its images with the fingerprint of their inputs; the plan job skips
+  # an image whose published label equals the fingerprint it computes for this run.
+  FINGERPRINT_LABEL: org.epartment.roll.source-fingerprint
 
 # Runs share the per-arch hand-off tags, so two overlapping runs could leave x86
 # and arm64 labelled with different run ids and both merges would skip the version.
@@ -46,10 +53,10 @@ concurrency:
 jobs:
   # ---------------------------------------------------------------------------
   # Discover which PHP / Node versions to build by listing the upstream tags
-  # with crane, then hand them to the matrix generators. Floor, deny-list and
+  # with crane, then hand them to the plan job's generator. Floor, deny-list and
   # pinned fallbacks live in php-matrix/constants.php — this job only supplies
-  # the raw discovered lists (the generators apply the policy). If discovery
-  # returns nothing (registry hiccup) the generators fall back to the pinned
+  # the raw discovered lists (the generator applies the policy). If discovery
+  # returns nothing (registry hiccup) the generator falls back to the pinned
   # lists, so the build never stalls for lack of a version list.
   # ---------------------------------------------------------------------------
   discover:
@@ -133,614 +140,216 @@ jobs:
           echo "Discovered PHP: ${PHP_VERSIONS:-<none — generators use pinned fallback>}"
           echo "Discovered Node: ${NODE_VERSIONS:-<none — generators use pinned fallback>}"
 
-  php-matrix:
-    name: Generate Base PHP Matrix
+  # ---------------------------------------------------------------------------
+  # Decide what to build. bake-generator.php lists the upstream and published
+  # images, collect-registry-state.sh reads their digests and fingerprint labels,
+  # and the generator emits the base and variant matrices for the images whose
+  # inputs changed. The ISO week is a fingerprint input, so the first run of each
+  # week rebuilds everything (scheduled runs without the base cache); a lookup
+  # failure counts as changed.
+  # ---------------------------------------------------------------------------
+  plan:
+    name: Plan the builds
     needs: discover
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
+      base: ${{ steps.plan.outputs.base }}
+      chunks: ${{ steps.plan.outputs.chunks }}
+      expected: ${{ steps.plan.outputs.expected }}
+      has_base: ${{ steps.plan.outputs.has_base }}
+      has_chunks: ${{ steps.plan.outputs.has_chunks }}
+      no_cache: ${{ steps.plan.outputs.no_cache }}
+      registry: ${{ steps.plan.outputs.registry }}
+      php_source_image: ${{ steps.plan.outputs.php_source_image }}
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
           php-version: 8.4
-      - id: matrix
-        env:
-          DISCOVERED_PHP_VERSIONS: ${{ needs.discover.outputs.php_versions }}
-          DISCOVERED_NODE_VERSIONS: ${{ needs.discover.outputs.node_versions }}
-          # A manual workflow_dispatch list REPLACES the resolved set rather than
-          # adding to it, so a targeted rebuild really is a two-job run.
-          OVERRIDE_PHP_VERSIONS: ${{ inputs.php_versions }}
-          OVERRIDE_NODE_VERSIONS: ${{ inputs.node_versions }}
-        run: |
-          php .github/workflows/php-matrix/php-generator.php >> $GITHUB_OUTPUT
-      - run: echo "Matrix:\n";echo '${{ steps.matrix.outputs.matrix }}'
-  node-matrix:
-    name: Generate Base PHP-Node Matrix
-    needs: discover
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: 8.4
-      - id: matrix
-        env:
-          DISCOVERED_PHP_VERSIONS: ${{ needs.discover.outputs.php_versions }}
-          DISCOVERED_NODE_VERSIONS: ${{ needs.discover.outputs.node_versions }}
-          # A manual workflow_dispatch list REPLACES the resolved set rather than
-          # adding to it, so a targeted rebuild really is a two-job run.
-          OVERRIDE_PHP_VERSIONS: ${{ inputs.php_versions }}
-          OVERRIDE_NODE_VERSIONS: ${{ inputs.node_versions }}
-        run: |
-          php .github/workflows/php-matrix/node-generator.php >> $GITHUB_OUTPUT
-      - run: echo "Matrix:\n";echo '${{ steps.matrix.outputs.matrix }}'
-  full-matrix:
-    name: Generate Full Matrix
-    needs: discover
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: 8.4
-      - id: matrix
-        env:
-          DISCOVERED_PHP_VERSIONS: ${{ needs.discover.outputs.php_versions }}
-          DISCOVERED_NODE_VERSIONS: ${{ needs.discover.outputs.node_versions }}
-          # A manual workflow_dispatch list REPLACES the resolved set rather than
-          # adding to it, so a targeted rebuild really is a two-job run.
-          OVERRIDE_PHP_VERSIONS: ${{ inputs.php_versions }}
-          OVERRIDE_NODE_VERSIONS: ${{ inputs.node_versions }}
-        run: |
-          php .github/workflows/php-matrix/full-generator.php >> $GITHUB_OUTPUT
-      - run: echo "Matrix:\n";echo '${{ steps.matrix.outputs.matrix }}'
-
-  php-fpm-build:
-    needs: [ discover, php-matrix ]
-    name: PHP-FPM ${{ matrix.php_version }} (${{ matrix.arch.cache_arch }})
-    runs-on: ${{ matrix.arch.runs_on }}
-    permissions:
-      contents: read
-      packages: write
-    continue-on-error: ${{ matrix.continue_on_error || false }}
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.php-matrix.outputs.matrix) }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            image=moby/buildkit:v0.10.6
-
+      - uses: docker/setup-buildx-action@v4
       - name: Login to GHCR
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push per-arch tag (${{ matrix.arch.cache_arch }})
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          file: php-fpm/Dockerfile
-          context: php-fpm/context
-          platforms: ${{ matrix.arch.docker_platform }}
-          build-args: |
-            PHP_VERSION=${{ matrix.php_version }}
-            OS_RELEASE=${{ matrix.php_os_release }}
-            ENV_SOURCE_IMAGE=${{ needs.discover.outputs.registry_base != '' && format('{0}/php', needs.discover.outputs.registry_base) || 'php' }}
-          tags: ${{ env.REGISTRY_IMAGE }}:${{ matrix.php_version }}-arch-${{ matrix.arch.cache_suffix }}
-          labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
-          push: true
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-buildcache,mode=max
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-
-  php-node:
-    name: PHP-FPM ${{ matrix.php_version }} + Node ${{ matrix.node_version }}
-    runs-on: ${{ matrix.arch.runs_on }}
-    needs: [ php-fpm-build, node-matrix ]
-    # Run even when some entries of the previous layer failed, so the combinations that did
-    # build still continue down the chain. Without this a single failing PHP version skips
-    # every job in this layer (plain `needs:` skips on ANY failure in the needed job).
-    # Gated on the matrix generator itself succeeding, since `fromJson` needs its output.
-    if: ${{ !cancelled() && needs.node-matrix.result == 'success' }}
-    continue-on-error: ${{ matrix.continue_on_error || false }}
-    strategy:
-      fail-fast: false
-      max-parallel: ${{ github.ref == 'refs/heads/master' && 6 || 0 }}
-      matrix: ${{fromJson(needs.node-matrix.outputs.matrix)}}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            image=moby/buildkit:v0.10.6
-      - name: Login to Github Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
         if: ${{ !env.ACT }}
-
-      - name: Build and push per-arch tag (${{ matrix.arch.cache_arch }})
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          file: php-fpm/node/Dockerfile
-          context: php-fpm/context
-          platforms: ${{ matrix.arch.docker_platform }}
-          # Build FROM the parent's per-arch tag of this run (pushed by the previous layer, which
-          # this job `needs:`), not its published multi-arch tag: that tag is created by a merge
-          # job nothing here waits for, so it is the previous run's image, or missing for a new
-          # PHP/Node version. Every layer below does the same.
-          build-args: |
-            ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
-            PHP_VERSION=${{ matrix.php_version }}-arch-${{ matrix.arch.cache_suffix }}
-            NODE_VERSION=${{ matrix.node_version }}
-            OS_RELEASE=${{ matrix.node_os_release }}
-            NODE_GYP_PYTHON=${{ matrix.node_gyp_python }}
-          tags: ${{ env.REGISTRY_IMAGE }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
-          labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
-          push: true
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-
-  xdebug:
-    needs: [ php-node, full-matrix ]
-    # Run even when some entries of the previous layer failed, so the combinations that did
-    # build still continue down the chain. Without this a single failing PHP version skips
-    # every job in this layer (plain `needs:` skips on ANY failure in the needed job).
-    # Gated on the matrix generator itself succeeding, since `fromJson` needs its output.
-    if: ${{ !cancelled() && needs.full-matrix.result == 'success' }}
-    name: PHP-FPM ${{ matrix.php_version }} + XDebug - Node ${{ matrix.node_version }}
-    runs-on: ${{ matrix.arch.runs_on }}
-    permissions:
-      contents: read
-      packages: write
-    continue-on-error: ${{ matrix.continue_on_error || false }}
-    strategy:
-      fail-fast: false
-      max-parallel: ${{ github.ref == 'refs/heads/master' && 2 || 0 }}
-      matrix: ${{fromJson(needs.full-matrix.outputs.matrix)}}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            image=moby/buildkit:v0.10.6
-      - name: Login to GHCR
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push per-arch tag (${{ matrix.arch.cache_arch }})
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          file: php-fpm/xdebug3/Dockerfile
-          context: php-fpm/context
-          platforms: ${{ matrix.arch.docker_platform }}
-          build-args: |
-            ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
-            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
-            XDEBUG_TYPE=${{ matrix.xdebug_type }}
-          tags: ${{ env.REGISTRY_XDEBUG }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
-          labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
-          push: true
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-debug:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-debug:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-
-  magento1:
-    needs: [ full-matrix, php-node ]
-    # Run even when some entries of the previous layer failed, so the combinations that did
-    # build still continue down the chain. Without this a single failing PHP version skips
-    # every job in this layer (plain `needs:` skips on ANY failure in the needed job).
-    # Gated on the matrix generator itself succeeding, since `fromJson` needs its output.
-    if: ${{ !cancelled() && needs.full-matrix.result == 'success' }}
-    name: Magento 1 PHP-FPM ${{ matrix.php_version }} - Node ${{ matrix.node_version }}
-    runs-on: ${{ matrix.arch.runs_on }}
-    permissions:
-      contents: read
-      packages: write
-    continue-on-error: ${{ matrix.continue_on_error || false }}
-    strategy:
-      fail-fast: false
-      max-parallel: ${{ github.ref == 'refs/heads/master' && 2 || 0 }}
-      matrix: ${{fromJson(needs.full-matrix.outputs.matrix)}}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            image=moby/buildkit:v0.10.6
-      - name: Login to GHCR
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push per-arch tag (${{ matrix.arch.cache_arch }})
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          file: php-fpm/magento1/Dockerfile
-          context: php-fpm/context
-          platforms: ${{ matrix.arch.docker_platform }}
-          build-args: |
-            ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
-            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
-          tags: ${{ env.REGISTRY_MAGENTO1 }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
-          labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
-          push: true
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento1:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento1:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-
-  magento2:
-    needs: [ full-matrix, php-node ]
-    # Run even when some entries of the previous layer failed, so the combinations that did
-    # build still continue down the chain. Without this a single failing PHP version skips
-    # every job in this layer (plain `needs:` skips on ANY failure in the needed job).
-    # Gated on the matrix generator itself succeeding, since `fromJson` needs its output.
-    if: ${{ !cancelled() && needs.full-matrix.result == 'success' }}
-    name: Magento 2 PHP-FPM ${{ matrix.php_version }} - Node ${{ matrix.node_version }}
-    runs-on: ${{ matrix.arch.runs_on }}
-    permissions:
-      contents: read
-      packages: write
-    continue-on-error: ${{ matrix.continue_on_error || false }}
-    strategy:
-      fail-fast: false
-      max-parallel: ${{ github.ref == 'refs/heads/master' && 2 || 0 }}
-      matrix: ${{fromJson(needs.full-matrix.outputs.matrix)}}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            image=moby/buildkit:v0.10.6
-      - name: Login to GHCR
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push per-arch tag (${{ matrix.arch.cache_arch }})
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          file: php-fpm/magento2/Dockerfile
-          context: php-fpm/context
-          platforms: ${{ matrix.arch.docker_platform }}
-          build-args: |
-            ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
-            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
-          tags: ${{ env.REGISTRY_MAGENTO2 }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
-          labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
-          push: true
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-
-  magento2-xdebug:
-    needs: [ full-matrix, magento2 ]
-    # Run even when some entries of the previous layer failed, so the combinations that did
-    # build still continue down the chain. Without this a single failing PHP version skips
-    # every job in this layer (plain `needs:` skips on ANY failure in the needed job).
-    # Gated on the matrix generator itself succeeding, since `fromJson` needs its output.
-    if: ${{ !cancelled() && needs.full-matrix.result == 'success' }}
-    name: Magento 2 PHP-FPM ${{ matrix.php_version }} + XDebug - Node ${{ matrix.node_version }}
-    runs-on: ${{ matrix.arch.runs_on }}
-    permissions:
-      contents: read
-      packages: write
-    continue-on-error: ${{ matrix.continue_on_error || false }}
-    strategy:
-      fail-fast: false
-      max-parallel: ${{ github.ref == 'refs/heads/master' && 2 || 0 }}
-      matrix: ${{fromJson(needs.full-matrix.outputs.matrix)}}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            image=moby/buildkit:v0.10.6
-      - name: Login to GHCR
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push per-arch tag (${{ matrix.arch.cache_arch }})
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          file: php-fpm/magento2/xdebug3/Dockerfile
-          context: php-fpm/context
-          platforms: ${{ matrix.arch.docker_platform }}
-          build-args: |
-            ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2
-            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
-            XDEBUG_TYPE=${{ matrix.xdebug_type }}
-          tags: ${{ env.REGISTRY_MAGENTO2_DEBUG }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
-          labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
-          push: true
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-magento2-debug:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-
-  wordpress:
-    needs: [ full-matrix, php-node ]
-    # Run even when some entries of the previous layer failed, so the combinations that did
-    # build still continue down the chain. Without this a single failing PHP version skips
-    # every job in this layer (plain `needs:` skips on ANY failure in the needed job).
-    # Gated on the matrix generator itself succeeding, since `fromJson` needs its output.
-    if: ${{ !cancelled() && needs.full-matrix.result == 'success' }}
-    name: Wordpress PHP-FPM ${{ matrix.php_version }} - Node ${{ matrix.node_version }}
-    runs-on: ${{ matrix.arch.runs_on }}
-    permissions:
-      contents: read
-      packages: write
-    continue-on-error: ${{ matrix.continue_on_error || false }}
-    strategy:
-      fail-fast: false
-      max-parallel: ${{ github.ref == 'refs/heads/master' && 2 || 0 }}
-      matrix: ${{fromJson(needs.full-matrix.outputs.matrix)}}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            image=moby/buildkit:v0.10.6
-      - name: Login to GHCR
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push per-arch tag (${{ matrix.arch.cache_arch }})
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          file: php-fpm/wordpress/Dockerfile
-          context: php-fpm/context
-          platforms: ${{ matrix.arch.docker_platform }}
-          build-args: |
-            ENV_SOURCE_IMAGE=ghcr.io/${{ github.repository_owner }}/roll/php-fpm
-            PHP_VERSION=${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
-          tags: ${{ env.REGISTRY_WORDPRESS }}:${{ matrix.php_version }}-node${{ matrix.node_version }}-arch-${{ matrix.arch.cache_suffix }}
-          labels: ${{ env.PER_ARCH_RUN_LABEL }}=${{ github.run_id }}
-          push: true
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/roll/php-fpm-wordpress:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-node${{ matrix.node_version }}-buildcache,mode=max
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-
-  merge:
-    needs: [ php-matrix, node-matrix, php-fpm-build, php-node ]
-    # Run even when some build-matrix entries failed, so the combinations that
-    # *did* build are still published. A single flaky build no longer blocks
-    # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
-    if: ${{ !cancelled() && github.ref == 'refs/heads/master' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GHCR
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create and push manifests per version
-        if: ${{ !env.ACT }}
+      - name: Plan the builds
+        id: plan
         env:
-          PHP_MATRIX: ${{ needs.php-matrix.outputs.matrix }}
-          NODE_MATRIX: ${{ needs.node-matrix.outputs.matrix }}
+          DISCOVERED_PHP_VERSIONS: ${{ needs.discover.outputs.php_versions }}
+          DISCOVERED_NODE_VERSIONS: ${{ needs.discover.outputs.node_versions }}
+          # A manual workflow_dispatch list REPLACES the resolved set rather than
+          # adding to it, so a targeted rebuild really builds only that set.
+          OVERRIDE_PHP_VERSIONS: ${{ inputs.php_versions }}
+          OVERRIDE_NODE_VERSIONS: ${{ inputs.node_versions }}
+          REGISTRY_BASE: ${{ needs.discover.outputs.registry_base }}
+          OWNER: ${{ github.repository_owner }}
+          RUN_ID: ${{ github.run_id }}
+          FORCE_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+          NO_CACHE_INPUT: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.no_cache) }}
         run: |
+          set -uo pipefail
+          REGISTRY="ghcr.io/$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')/roll"
+          PHP_SOURCE_IMAGE="php"
+          if [ -n "$REGISTRY_BASE" ]; then PHP_SOURCE_IMAGE="${REGISTRY_BASE}/php"; fi
+          TREE_HASH=$(git ls-tree HEAD php-fpm .github/workflows/docker-image-php-fpm.yml \
+            .github/workflows/php-matrix .github/scripts .trigger | sha256sum | cut -d' ' -f1)
+          BUILD_WEEK=$(date -u +%G-W%V)
+          FORCE=0
+          if [ "$FORCE_INPUT" = "true" ]; then FORCE=1; fi
+          export REGISTRY PHP_SOURCE_IMAGE TREE_HASH BUILD_WEEK FORCE RUN_ID
+
+          generator=.github/workflows/php-matrix/bake-generator.php
+          summary="$RUNNER_TEMP/plan-summary.txt"
+          if ! php "$generator" refs \
+              | .github/scripts/collect-registry-state.sh \
+              | php "$generator" matrix 2>"$summary" >>"$GITHUB_OUTPUT"; then
+            cat "$summary" >&2
+            exit 1
+          fi
           {
-            jq -r '.include[] | "\(.php_version) \(.arch.cache_suffix)"' <<<"$PHP_MATRIX"
-            jq -r '.include[] | "\(.php_version)-node\(.node_version) \(.arch.cache_suffix)"' <<<"$NODE_MATRIX"
-          } | bash .github/scripts/merge-per-arch-tags.sh "${{ env.REGISTRY_IMAGE }}" "${{ github.run_id }}"
+            echo "no_cache=${NO_CACHE_INPUT}"
+            echo "registry=${REGISTRY}"
+            echo "php_source_image=${PHP_SOURCE_IMAGE}"
+          } >>"$GITHUB_OUTPUT"
+          {
+            echo "### Build plan (week ${BUILD_WEEK}, force=${FORCE}, no_cache=${NO_CACHE_INPUT})"
+            echo '```'
+            cat "$summary"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          cat "$summary"
 
-  merge-xdebug:
-    needs: [ full-matrix, xdebug ]
-    # Run even when some build-matrix entries failed, so the combinations that
-    # *did* build are still published. A single flaky build no longer blocks
-    # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
-    if: ${{ !cancelled() && github.ref == 'refs/heads/master' }}
-    runs-on: ubuntu-latest
+  # ---------------------------------------------------------------------------
+  # One job per PHP version × architecture: the base image and the tools image
+  # (mydumper + Xdebug module), pushed as per-arch tags labelled with this run's
+  # id and the base fingerprint. Each arch builds on its native runner (no QEMU).
+  # ---------------------------------------------------------------------------
+  base:
+    name: Base PHP ${{ matrix.php_version }} (${{ matrix.arch.cache_arch }})
+    needs: plan
+    if: ${{ needs.plan.outputs.has_base == 'true' }}
+    runs-on: ${{ matrix.arch.runs_on }}
     permissions:
       contents: read
       packages: write
-
+    continue-on-error: ${{ matrix.continue_on_error }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.plan.outputs.base) }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
+      - uses: docker/setup-buildx-action@v4
       - name: Login to GHCR
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        if: ${{ !env.ACT }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create and push manifests per version
+      - name: Build and push the base and tools images
         if: ${{ !env.ACT }}
         env:
-          MATRIX: ${{ needs.full-matrix.outputs.matrix }}
+          PHP_VERSION: ${{ matrix.php_version }}
+          PHP_OS_RELEASE: ${{ matrix.php_os_release }}
+          PHP_SOURCE_IMAGE: ${{ needs.plan.outputs.php_source_image }}
+          XDEBUG_TYPE: ${{ matrix.xdebug_type }}
+          ARCH_SUFFIX: ${{ matrix.arch.cache_suffix }}
+          REGISTRY: ${{ needs.plan.outputs.registry }}
+          RUN_ID: ${{ github.run_id }}
+          PUSH: "true"
+          BASE_FINGERPRINT: ${{ matrix.fingerprint }}
+          BASE_CACHE_REF: ${{ needs.plan.outputs.registry }}/php-fpm:${{ matrix.php_version }}-${{ matrix.arch.cache_suffix }}-buildcache
+          NO_CACHE: ${{ needs.plan.outputs.no_cache }}
         run: |
-          jq -r '.include[] | "\(.php_version)-node\(.node_version) \(.arch.cache_suffix)"' <<<"$MATRIX" \
-            | bash .github/scripts/merge-per-arch-tags.sh "${{ env.REGISTRY_XDEBUG }}" "${{ github.run_id }}"
+          set -uo pipefail
+          bake_args=(-f php-fpm/docker-bake.hcl --progress=plain)
+          if [ "$NO_CACHE" = "true" ]; then bake_args+=(--no-cache); fi
+          docker buildx bake "${bake_args[@]}" base-stage
 
-  merge-magento1:
-    needs: [ full-matrix, magento1 ]
-    # Run even when some build-matrix entries failed, so the combinations that
-    # *did* build are still published. A single flaky build no longer blocks
-    # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
-    if: ${{ !cancelled() && github.ref == 'refs/heads/master' }}
-    runs-on: ubuntu-latest
+  # ---------------------------------------------------------------------------
+  # One job per PHP version × architecture × chunk of Node versions: the php+node
+  # image and its five variants for each Node version, one bake call per Node
+  # version (a failing version does not stop the next one). Builds on the base and
+  # tools per-arch tags of this run, or on the reused ones when the base did not
+  # change. Runs even when some base jobs failed (plain `needs:` would skip the
+  # whole matrix); the script refuses a base that is not this run's or stale.
+  # ---------------------------------------------------------------------------
+  variants:
+    name: PHP ${{ matrix.php_version }} ${{ matrix.chunk }} (${{ matrix.arch.cache_arch }})
+    needs: [ plan, base ]
+    if: ${{ !cancelled() && needs.plan.outputs.has_chunks == 'true' }}
+    runs-on: ${{ matrix.arch.runs_on }}
     permissions:
       contents: read
       packages: write
-
+    continue-on-error: ${{ matrix.continue_on_error }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.plan.outputs.chunks) }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
+      - uses: docker/setup-buildx-action@v4
       - name: Login to GHCR
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        if: ${{ !env.ACT }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create and push manifests per version
+      - run: df -h /
+      - name: Build and push the variants
         if: ${{ !env.ACT }}
         env:
-          MATRIX: ${{ needs.full-matrix.outputs.matrix }}
-        run: |
-          jq -r '.include[] | "\(.php_version)-node\(.node_version) \(.arch.cache_suffix)"' <<<"$MATRIX" \
-            | bash .github/scripts/merge-per-arch-tags.sh "${{ env.REGISTRY_MAGENTO1 }}" "${{ github.run_id }}"
+          PHP_VERSION: ${{ matrix.php_version }}
+          PHP_OS_RELEASE: ${{ matrix.php_os_release }}
+          XDEBUG_TYPE: ${{ matrix.xdebug_type }}
+          ARCH_SUFFIX: ${{ matrix.arch.cache_suffix }}
+          REGISTRY: ${{ needs.plan.outputs.registry }}
+          RUN_ID: ${{ github.run_id }}
+          PUSH: "true"
+          BASE_FINGERPRINT: ${{ matrix.base_fingerprint }}
+          BASE_BUILT: ${{ matrix.base_built }}
+          CHUNK_NODES: ${{ matrix.nodes }}
+        run: .github/scripts/bake-php-fpm-variants.sh
 
-  merge-magento2:
-    needs: [ full-matrix, magento2 ]
-    # Run even when some build-matrix entries failed, so the combinations that
-    # *did* build are still published. A single flaky build no longer blocks
-    # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
-    if: ${{ !cancelled() && github.ref == 'refs/heads/master' }}
+  # ---------------------------------------------------------------------------
+  # Publish the multi-arch tags, one leg per image. Runs even when some build
+  # jobs failed, so the versions that did build are still published; the merge
+  # script publishes a version only when every arch tag carries this run's id and
+  # keeps the previous image otherwise.
+  # ---------------------------------------------------------------------------
+  merge:
+    name: Merge ${{ matrix.image }}
+    needs: [ plan, base, variants ]
+    if: ${{ !cancelled() && github.ref == 'refs/heads/master' && (needs.plan.outputs.has_base == 'true' || needs.plan.outputs.has_chunks == 'true') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [ php-fpm, php-fpm-debug, php-fpm-magento1, php-fpm-magento2, php-fpm-magento2-debug, php-fpm-wordpress ]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
+      - uses: docker/setup-buildx-action@v4
       - name: Login to GHCR
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
+        if: ${{ !env.ACT }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create and push manifests per version
-        if: ${{ !env.ACT }}
+      - name: Create and push the multi-arch tags
+        if: ${{ !env.ACT && fromJson(needs.plan.outputs.expected)[matrix.image] != null }}
         env:
-          MATRIX: ${{ needs.full-matrix.outputs.matrix }}
-        run: |
-          jq -r '.include[] | "\(.php_version)-node\(.node_version) \(.arch.cache_suffix)"' <<<"$MATRIX" \
-            | bash .github/scripts/merge-per-arch-tags.sh "${{ env.REGISTRY_MAGENTO2 }}" "${{ github.run_id }}"
-
-  merge-magento2-xdebug:
-    needs: [ full-matrix, magento2-xdebug ]
-    # Run even when some build-matrix entries failed, so the combinations that
-    # *did* build are still published. A single flaky build no longer blocks
-    # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
-    if: ${{ !cancelled() && github.ref == 'refs/heads/master' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GHCR
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create and push manifests per version
-        if: ${{ !env.ACT }}
-        env:
-          MATRIX: ${{ needs.full-matrix.outputs.matrix }}
-        run: |
-          jq -r '.include[] | "\(.php_version)-node\(.node_version) \(.arch.cache_suffix)"' <<<"$MATRIX" \
-            | bash .github/scripts/merge-per-arch-tags.sh "${{ env.REGISTRY_MAGENTO2_DEBUG }}" "${{ github.run_id }}"
-
-  merge-wordpress:
-    needs: [ full-matrix, wordpress ]
-    # Run even when some build-matrix entries failed, so the combinations that
-    # *did* build are still published. A single flaky build no longer blocks
-    # every tag (only `cancelled()` — e.g. a manual cancel — stops the merge).
-    if: ${{ !cancelled() && github.ref == 'refs/heads/master' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GHCR
-        if: ${{ github.ref == 'refs/heads/master' && !env.ACT }}
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create and push manifests per version
-        if: ${{ !env.ACT }}
-        env:
-          MATRIX: ${{ needs.full-matrix.outputs.matrix }}
-        run: |
-          jq -r '.include[] | "\(.php_version)-node\(.node_version) \(.arch.cache_suffix)"' <<<"$MATRIX" \
-            | bash .github/scripts/merge-per-arch-tags.sh "${{ env.REGISTRY_WORDPRESS }}" "${{ github.run_id }}"
+          EXPECTED: ${{ toJson(fromJson(needs.plan.outputs.expected)[matrix.image]) }}
+          IMAGE: ${{ needs.plan.outputs.registry }}/${{ matrix.image }}
+          RUN_ID: ${{ github.run_id }}
+        run: jq -r '.[]' <<<"$EXPECTED" | bash .github/scripts/merge-per-arch-tags.sh "$IMAGE" "$RUN_ID"
