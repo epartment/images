@@ -313,6 +313,10 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
 - *Suggested fix:* Prune the cross product to supported pairs — a per-PHP minimum/maximum Node range
   in `constants.php` would remove most of the matrix. Once the job count is realistic, raise
   `max-parallel` accordingly.
+- *Update 2026-11-11:* **Fixed for the throttle.** The php-fpm workflow no longer uses `max-parallel`.
+  The ~1370 per-combination jobs became 16 `base` jobs (PHP x arch) and 80 to 96 `variants` jobs
+  (PHP x arch x chunk of up to three Node versions), so the matrix runs unthrottled at a realistic
+  size. The unsupported PHP and Node pairs are still built; pruning them is not part of this change.
 
 <a id="m3"></a>
 **M3. BuildKit is pinned to a 2022 release in every build job** — `.github/workflows/docker-image-php-fpm.yml:204,268,333,398,462,526,591`
@@ -330,6 +334,9 @@ Matching the scale used in `FEATURE-REQUESTS.md`:
 - *Suggested fix:* Drop the `driver-opts` block and let `docker/setup-buildx-action@v3` select its
   default BuildKit; if a regression appears, pin forward to a recent tag with a comment stating the
   reason.
+- *Update 2026-11-11:* **Fixed.** The `driver-opts: image=moby/buildkit:v0.10.6` pin is gone, along
+  with the per-layer `docker/build-push-action` jobs. Builds run through `docker buildx bake` on the
+  default BuildKit selected by `docker/setup-buildx-action`.
 
 <a id="m4"></a>
 **M4. `--platform=$BUILDPLATFORM` on the final stage builds for the builder, not the target** — `php-fpm/Dockerfile:8`

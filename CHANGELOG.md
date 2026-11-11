@@ -54,6 +54,38 @@ summarised as the net result.
     longer compiles on arm64, where node-sass has no prebuilt binary; such a project needs
     node-sass 6 or later. node-sass 6 keeps working through the Python 3.10 above; node-sass 7
     and later (node-gyp 8 or newer) run on Python 3.11.
+- **php-fpm (build pipeline):** the workflow builds with `docker buildx bake`
+  (`php-fpm/docker-bake.hcl`) in five jobs, `discover` → `plan` → `base` → `variants` → `merge`,
+  instead of one job per PHP × Node × arch × layer. Same images and tags, about 16 `base` jobs,
+  80 to 96 `variants` jobs and 6 `merge` jobs instead of about 1370 jobs (96 with the Node versions
+  discovered on 2026-11-11; CI run time not yet measured):
+  - the new `tools` image (`php-fpm/tools/Dockerfile`) compiles mydumper/myloader and the Xdebug
+    module once per PHP version instead of once per Node version, and the `base` job pushes it as
+    `php-fpm:<php>-tools-arch-<x86|arm64>`;
+  - a `variants` job builds up to three Node versions (`NODE_CHUNK_SIZE` in `constants.php`), one
+    bake call each, so a failing Node version does not stop the next; it prunes the builder when
+    the runner has less than 6 GB of disk free;
+  - the `plan` job skips images whose inputs did not change: images carry the label
+    `org.epartment.roll.source-fingerprint`, and one whose label equals the run's fingerprint is
+    not rebuilt. The fingerprint includes the ISO week, so the first run of each week rebuilds
+    everything, and scheduled runs build the base stage without cache. A failed registry lookup
+    counts as changed. A run with nothing changed ends after `plan`;
+  - manual runs get `force` (default on: build even when unchanged) and `no_cache` inputs next to
+    `php_versions` and `node_versions`;
+  - the six copy-pasted merge jobs became one `merge` job with a leg per image, fed by the plan's
+    list of expected versions; the publish rule of `merge-per-arch-tags.sh` is unchanged;
+  - `php-fpm/xdebug3/Dockerfile` now builds both `php-fpm-debug` and `php-fpm-magento2-debug`,
+    copies the Xdebug module from the tools image and fails the build when `php -m` lacks xdebug;
+  - the QEMU setup, the `moby/buildkit:v0.10.6` pin and `max-parallel` are gone.
+
+### Removed
+
+- **php-fpm (sources):** `php-fpm/magento2/xdebug3/`, `php-fpm/magento1/xdebug3/` and
+  `php-fpm/wordpress/xdebug3/` (replaced by the single `php-fpm/xdebug3/Dockerfile`; the Magento 1
+  and WordPress ones were not used by any image), the `mydumper-builder` stage of
+  `php-fpm/magento2/Dockerfile` (now in the tools image), and the matrix generators
+  `php-generator.php`, `node-generator.php` and `full-generator.php` (replaced by
+  `.github/workflows/php-matrix/bake-generator.php`).
 
 ### Fixed
 
