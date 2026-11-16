@@ -10,7 +10,8 @@
 # Prints "<kind><TAB><ref><TAB><value>" per request, in input order. The value is
 # "-" for anything that cannot be read (missing tag, no label, registry error), so
 # a lookup failure counts as "changed" for the caller. A multi-platform index
-# counts as having the label only when all its platforms carry the same value.
+# counts as having the label only when every platform carries the same non-empty
+# value; one unlabelled platform makes the whole index "-".
 # Exits 0 unless the input is unusable.
 set -uo pipefail
 
@@ -38,9 +39,9 @@ inspect_ref() {
       value=$(jq -r --arg label "$FINGERPRINT_LABEL" '
         .image
         | (if has("config") then [.] else [.[]] end)
-        | map(.config.Labels[$label] // empty)
+        | map(.config.Labels[$label] // "")
         | unique
-        | if length == 1 then .[0] else empty end
+        | if length == 1 and .[0] != "" then .[0] else empty end
       ' <<<"$json")
     fi
   fi

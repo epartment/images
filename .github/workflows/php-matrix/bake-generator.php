@@ -7,6 +7,7 @@ require_once(__DIR__ . DIRECTORY_SEPARATOR . 'constants.php');
 const DEFAULT_REGISTRY = 'ghcr.io/epartment/roll';
 const DEFAULT_PHP_SOURCE_IMAGE = 'php';
 const UNAVAILABLE = '-';
+const UNKNOWN_FINGERPRINT_PREFIX = 'unknown-';
 const FIXED_UPSTREAM_IMAGES = ['composer:1', 'composer:2.2', 'composer:2', 'golang:alpine', '99designs/phantomjs:2.1.1'];
 const VARIANT_IMAGES = ['php-fpm', 'php-fpm-debug', 'php-fpm-magento1', 'php-fpm-magento2', 'php-fpm-magento2-debug', 'php-fpm-wordpress'];
 
@@ -36,11 +37,16 @@ function tools_ref(string $phpVersion, array $arch): string
     return registry_image('php-fpm', $phpVersion . '-tools-arch-' . $arch['cache_suffix']);
 }
 
-/** The published base tag and the per-arch tools tags whose labels decide whether the base is unchanged. */
+/**
+ * The tags whose labels decide whether the base is unchanged: the published base, and per arch
+ * the base and tools hand-off tags the variants build on (a base job that pushed the base but
+ * failed on tools leaves those two out of step).
+ */
 function base_published_refs(string $phpVersion): array
 {
     $refs = [registry_image('php-fpm', $phpVersion)];
     foreach (ARCHES as $arch) {
+        $refs[] = registry_image('php-fpm', $phpVersion . '-arch-' . $arch['cache_suffix']);
         $refs[] = tools_ref($phpVersion, $arch);
     }
 
@@ -86,13 +92,13 @@ function registry_refs(array $phpVersions, array $nodeVersions): array
 
 /**
  * Hex sha256 of the newline-joined inputs. An input equal to UNAVAILABLE (a digest that could not
- * be read) makes the result "unknown-<run id>", which never equals a published label, so the image
- * is built.
+ * be read) makes the result "unknown-<run id>"; all_labelled() never accepts such a fingerprint, so
+ * the image is built, also when a re-run of the same run id published it before.
  */
 function fingerprint(array $inputs, string $runId): string
 {
     if (in_array(UNAVAILABLE, $inputs, true)) {
-        return 'unknown-' . $runId;
+        return UNKNOWN_FINGERPRINT_PREFIX . $runId;
     }
 
     return hash('sha256', implode("\n", $inputs));
@@ -122,6 +128,9 @@ function node_inputs(array $state, array $baseInputs, string $nodeVersion): arra
 /** Whether every given published ref carries the fingerprint as its label value. */
 function all_labelled(array $state, array $refs, string $fingerprint): bool
 {
+    if (str_starts_with($fingerprint, UNKNOWN_FINGERPRINT_PREFIX)) {
+        return false;
+    }
     foreach ($refs as $ref) {
         if (($state[$ref] ?? UNAVAILABLE) !== $fingerprint) {
             return false;
