@@ -30,6 +30,30 @@ summarised as the net result.
   tagged `8` and `9`, but only when the upstream tag listing succeeded, so a failed listing never
   moves `:9` back to the pinned 9.0. A minor whose upstream tag still points at a release candidate
   (`9.2` in November 2026) is skipped until its first final release.
+- **php-fpm (bookworm images):** a standalone CPython 3.10 under `/opt/python-node-gyp`, installed
+  only where the system Python is 3.11 or newer, because node-gyp 7 and older (node-sass 5 and 6,
+  npm's bundled node-gyp on Node 12 and 14) fails on Python 3.11 and bookworm has no older Python.
+  The php+node images with Node below 18 on a bookworm base set `NODE_GYP_FORCE_PYTHON` to it; only
+  node-gyp reads that variable. On Node 18 and later it is empty, and a project whose dependency
+  still ships an old node-gyp can set `NODE_GYP_FORCE_PYTHON=/opt/python-node-gyp/bin/python3`
+  itself.
+
+### Changed
+
+- **php-fpm 8.1–8.4:** built on Debian bookworm instead of bullseye, so they follow upstream PHP
+  patch releases again. Upstream stopped rebuilding the bullseye images in August 2025: 8.1.33 →
+  8.1.34, 8.2.29 → 8.2.35, 8.3.24 → 8.3.36, 8.4.11 → 8.4.27 (versions as of 2026-11-10). 7.3, 7.4
+  and 8.0 stay on bullseye, as upstream publishes no newer base for them. Node 22 and later are
+  copied from the bookworm Node images; Node 21 and older keep their previous release. What changes
+  for projects on 8.1–8.4:
+  - OpenSSL 3.0 instead of 1.1.1: PHP's openssl no longer offers `rc4` and `bf-cbc`
+    (`des-ede3-cbc` and `aes-256-cbc` remain);
+  - ICU 72 instead of 67 (PHP intl), MariaDB client 10.11 instead of 10.5, git 2.39 instead of
+    2.30;
+  - Python 3.11 instead of 3.9, and no `python2`. node-sass 4.x (node-gyp 3.8, Python 2 only) no
+    longer compiles on arm64, where node-sass has no prebuilt binary; such a project needs
+    node-sass 6 or later. node-sass 6 keeps working through the Python 3.10 above; node-sass 7
+    and later (node-gyp 8 or newer) run on Python 3.11.
 
 ### Fixed
 
