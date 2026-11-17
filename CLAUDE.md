@@ -37,31 +37,45 @@ nothing (every other job `needs:` an entry job and is skipped with it). Keep all
 when adding or editing a workflow. Registry logins and pushes are additionally skipped
 under `act`; `env` is not available in a job-level `if:`, so `!env.ACT` goes on steps.
 
-Every workflow has a two-stage shape: a **`discover`** job decides which versions to
-build, then a **build matrix** builds each version as an independent job. `fail-fast:
-false` is set everywhere, so one version failing never stops the others.
+The simple service workflows have a two-stage shape: a **`discover`** job decides which
+versions to build, then a **build matrix** builds each version as an independent job.
+`fail-fast: false` is set everywhere, so one version failing never stops the others.
+
+`docker-image-php-fpm.yml` has five stages: `discover` (master gate, resolves versions) →
+`plan` (fingerprints, decides what to build) → `base` (one job per PHP × arch) → `variants`
+(one job per PHP × arch × chunk of up to `NODE_CHUNK_SIZE` = 3 Node versions) → `merge` (one
+leg per image with something to publish, at most six). It builds with `docker buildx bake` (`php-fpm/docker-bake.hcl`), about
+16 + 80–96 + up to 6 jobs instead of ~1370. A run where nothing changed ends after `plan`.
 
 **Robustness invariants to preserve when editing workflows:**
-- Build-matrix jobs are independent (`fail-fast: false`) — never introduce a shared
-  failure point across versions.
-- php-fpm `merge-*` jobs run with `if: ${{ !cancelled() && ... }}` and publish only
-  versions whose per-arch tags were **all** built in this run (checked by run-id label in
-  `.github/scripts/merge-per-arch-tags.sh`), skipping incomplete ones rather than failing. This is what stops one flaky combination from blocking
+- Matrix jobs are independent (`fail-fast: false`) — never introduce a shared
+  failure point across versions. Inside a `variants` job each Node version has its own
+  bake call (a failing one does not stop the next; the job fails at the end).
+- php-fpm `variants` and `merge` jobs run with `if: ${{ !cancelled() && ... }}`, and `merge`
+  publishes only versions whose per-arch tags were **all** built in this run (checked by
+  run-id label in `.github/scripts/merge-per-arch-tags.sh`), skipping incomplete ones rather
+  than failing. This is what stops one flaky combination from blocking
   every tag — don't revert it to a plain `needs:`-gated merge.
 - The php-fpm workflow has a workflow-level `concurrency` group with
   `cancel-in-progress: false`. Runs share the per-arch hand-off tags, so overlapping runs
   would mix run ids between arches and both merges would skip. Keep it, and never set
   `cancel-in-progress: true`, which would kill a multi-hour build.
+- The hand-off between jobs and layers is per-arch tags in the registry, never workflow
+  artifacts; builds run on native runners per arch (no QEMU).
+- A registry lookup that fails in `plan` counts as "changed" (build, never skip).
 - EOL/experimental combinations are `continue-on-error` (see `constants.php`).
 - In-Dockerfile downloads use `curl --retry` / retry loops, not bare `ADD <url>` or a
   single `composer require`/`npm install`.
 
 **`.trigger`** at the repo root is a no-op file listed in the `paths:` of many
 workflows. Editing it (e.g. changing the UUID) is the way to force a rebuild of
-all images that watch it without touching any Dockerfile.
+all images that watch it without touching any Dockerfile (for php-fpm it is part of the tree
+hash in the fingerprint). A php-fpm dispatch with `force` (default on) does the same.
 
 To validate a change before merging, build the image locally (`docker buildx build`
-with the same build args the workflow passes), or run the workflow with `act`. Because
+with the same build args the workflow passes; php-fpm with `docker buildx bake -f
+php-fpm/docker-bake.hcl`, see README "Validating a change without merging": never run it with
+`PUSH=true` and `REGISTRY` pointing at ghcr.io), or run the workflow with `act`. Because
 the entry jobs are gated on `master`, `act` on a feature branch skips everything unless
 you pass an event with `"ref": "refs/heads/master"` (`act -e event.json`); logins,
 pushes and manifest merges are skipped under `act` either way.
@@ -69,23 +83,27 @@ pushes and manifest merges are skipped under `act` either way.
 ## The php-fpm image graph (most important architecture)
 
 `php-fpm` is not one image — it's a chain of layered images, each built `FROM`
-the previous via the `ENV_SOURCE_IMAGE` + `PHP_VERSION` build-args. All share the
-single build context `php-fpm/context/` but use different Dockerfiles:
+the previous one. All share the single build context `php-fpm/context/` but use different
+Dockerfiles. `php-fpm/docker-bake.hcl` describes the chain for one PHP version: inside one bake
+call each layer gets its parent as a named context (`target:<parent>`), and the `variants` jobs
+get the base and tools images the `base` job pushed as `docker-image://<per-arch tag>`:
 
 ```
 php (official)
-  └─ php-fpm/Dockerfile            → roll/php-fpm        (extensions, tools, composer, oh-my-zsh)
-       └─ php-fpm/node/Dockerfile  → roll/php-fpm        (+ Node/yarn/phantomjs, re-tagged same repo)
+  └─ php-fpm/Dockerfile            → roll/php-fpm        (extensions, tools, composer, oh-my-zsh)   [base job]
+       ├─ php-fpm/tools/Dockerfile → roll/php-fpm:<php>-tools  (FROM scratch: mydumper/myloader, Xdebug module)
+       └─ php-fpm/node/Dockerfile  → roll/php-fpm        (+ Node/yarn/phantomjs, re-tagged same repo)   [variants jobs]
             ├─ php-fpm/xdebug3/Dockerfile           → roll/php-fpm-debug
             ├─ php-fpm/magento1/Dockerfile          → roll/php-fpm-magento1
-            ├─ php-fpm/magento2/Dockerfile          → roll/php-fpm-magento2   (+ magerun, mydumper, cache-clean)
-            │    └─ php-fpm/magento2/xdebug3/Dockerfile → roll/php-fpm-magento2-debug
+            ├─ php-fpm/magento2/Dockerfile          → roll/php-fpm-magento2   (+ magerun, mydumper from tools, cache-clean)
+            │    └─ php-fpm/xdebug3/Dockerfile      → roll/php-fpm-magento2-debug
             └─ php-fpm/wordpress/Dockerfile         → roll/php-fpm-wordpress
 ```
 
-Each Dockerfile starts with `ARG ENV_SOURCE_IMAGE` / `ARG PHP_VERSION` then
-`FROM ${ENV_SOURCE_IMAGE}:${PHP_VERSION}` — the workflow passes the previous
-stage's registry image as `ENV_SOURCE_IMAGE` so layers stack. Version-conditional
+The tools image is built once per PHP version (not per Node version) and the Magento 2 and
+Xdebug Dockerfiles `COPY --from=roll-tools`, so they only build through the bake file.
+`php-fpm/xdebug3/Dockerfile` is the single Xdebug Dockerfile for `php-fpm-debug` and
+`php-fpm-magento2-debug` and fails the build when `php -m` lacks xdebug. Version-conditional
 logic inside the Dockerfiles is done with shell `sort -g`/`sort -V` comparisons on
 `${PHP_VERSION}` (e.g. "install imagick only if PHP > 7.2 && < 8.3").
 
@@ -93,25 +111,24 @@ logic inside the Dockerfiles is done with shell `sort -g`/`sort -V` comparisons 
 
 `docker-image-php-fpm.yml` does not hard-code versions. Its **`discover`** job lists
 the upstream `php`/`node` tags with crane (preferring the GHCR `base-images` mirror,
-falling back to Docker Hub) and passes them to three PHP generator scripts in
-`.github/workflows/php-matrix/` via the `DISCOVERED_PHP_VERSIONS` /
-`DISCOVERED_NODE_VERSIONS` env vars. The generators emit the GitHub Actions matrix
-JSON (one entry per PHP × Node × arch):
+falling back to Docker Hub) and passes them to the `plan` job through the
+`DISCOVERED_PHP_VERSIONS` / `DISCOVERED_NODE_VERSIONS` env vars. `plan` runs
+`bake-generator.php refs | collect-registry-state.sh | bake-generator.php matrix`
+(`.github/workflows/php-matrix/`, `.github/scripts/`): the first step lists upstream image
+refs, the second reads their digests and the published images' labels, the third emits the
+`base` and `variants` matrices and the `expected` list for `merge`.
 
 - `constants.php` — the **policy / single source of truth**: floor (`*_MIN_VERSION`),
   always-build + fallback (`*_PIN_VERSIONS`), exclude (`*_DENY_VERSIONS`), per-version
   Debian `OS_RELEASE` maps, EOL/experimental/xdebug lists, and `ARCHES`. The
   `php_versions()` / `node_versions()` helpers resolve discovered ∪ pinned − deny,
   above the floor. **Edit this to add/pin/exclude a PHP or Node version** (see the
-  file header and README → "Adding or changing a version").
-- `php-generator.php` — base PHP × arch (for the base php-fpm build).
-- `node-generator.php` — PHP × Node × arch (for the +node layer).
-- `full-generator.php` — PHP × Node × arch with xdebug/EOL/`latest` flags (for the
-  Magento/WordPress/xdebug layers).
-
-Run a generator locally to preview the matrix (it falls back to the pinned lists when
-the `DISCOVERED_*` env vars are unset):
-`php .github/workflows/php-matrix/full-generator.php | sed 's/^matrix=//' | jq`.
+  file header and README → "Adding or changing a version"). It also holds
+  `NODE_CHUNK_SIZE` (Node versions per `variants` job; EOL and supported ones are chunked
+  separately).
+- `bake-generator.php` — the only generator (`refs` and `matrix` modes). Preview upstream
+  refs locally: `php .github/workflows/php-matrix/bake-generator.php refs` (`matrix` needs
+  `TREE_HASH` and `BUILD_WEEK`, or `FORCE=1`).
 
 The simple per-service workflows use the same floor/pin/deny policy, but inline as
 shell variables (`MIN` / `PIN` / `DENY`) in their own `discover` job, plus a
@@ -119,28 +136,38 @@ shell variables (`MIN` / `PIN` / `DENY`) in their own `discover` job, plus a
 
 ### Multi-arch via per-arch tags + manifest merge
 
-Each layer is built **per-architecture separately** (on native amd64 and arm64
-runners — no QEMU; `platforms:` must be the leg's own `matrix.arch.docker_platform`).
-Each leg pushes `<image>:<version>-arch-<cache_suffix>`, labelled
-`$PER_ARCH_RUN_LABEL=<run id>`. Separate `merge*` jobs feed every
-`<version> <arch-suffix>` pair of the build matrix (jq over the matrix job's output) into
+Each image is built **per-architecture separately** (on native amd64 and arm64
+runners — no QEMU). `base` jobs push `php-fpm:<php>-arch-<suffix>` and
+`php-fpm:<php>-tools-arch-<suffix>` (registry cache `…-<suffix>-buildcache`); `variants` jobs
+run `.github/scripts/bake-php-fpm-variants.sh` and push `<image>:<version>-arch-<suffix>`.
+All are labelled `$PER_ARCH_RUN_LABEL=<run id>` (`org.epartment.roll.ci-run-id`) and
+`org.epartment.roll.source-fingerprint`. The variants script builds on the pushed base/tools
+and refuses a base whose labels do not match the plan (built in this run but missing: warning,
+nothing built; reused without the planned fingerprint: error), and prunes the builder below
+6 GB free disk. The `merge` job (one leg per image) feeds the plan's `expected` list into
 `.github/scripts/merge-per-arch-tags.sh`. The script inspects the per-arch tags in
 parallel and runs `docker buildx imagetools create` from their digests only when all
 arches of a version carry **this run's** id. Incomplete or stale versions are skipped
 and keep their previous image, and every skip is listed in the step summary. The merge
 runs even if some builds failed. No `latest` tag is created.
 
-The per-arch tags are also the hand-off **between layers**: each layer job builds `FROM` its
-parent's per-arch tag of the same leg (`PHP_VERSION=<version>-arch-<cache_suffix>`), never
-the parent's published multi-arch tag. A layer job `needs:` its parent's build job, so that
-tag is this run's image; the published tag is made by a merge job nothing waits for, so it
-would be the previous run's image, or missing altogether for a new PHP/Node version (a new
-version then took one daily run per layer to reach the bottom of the chain).
+`plan` skips an image whose published `source-fingerprint` label equals the fingerprint
+computed for this run (sha256 of the `php-fpm` tree hash, workflow, `php-matrix/`,
+`.github/scripts` and `.trigger`, the ISO week, and the digests of the fixed upstream images
+and the PHP/Node base image). The week makes the first run of each week rebuild everything;
+scheduled runs build the base stage with `--no-cache`. A failed lookup counts as changed.
+`workflow_dispatch` inputs: `php_versions`/`node_versions` (replace the resolved set), `force`
+(default true), `no_cache`.
+
+The per-arch tags are also the hand-off **between layers and jobs**: `variants` build on the
+`base` job's per-arch tags of this run, never on the published multi-arch tag, which a merge job
+publishes without anything waiting for it (a new PHP/Node version would otherwise take one daily
+run per layer to reach the bottom of the chain).
 
 Do **not** go back to workflow artifacts for the digest hand-off. A run lists only about
-its first 1000 artifacts. This matrix produces ~1350, so the last layers' digests were
-silently invisible to their merge jobs (2026-10-07). When adding a new layered image,
-add both a build job (pushing a labelled per-arch tag) and a matching `merge-*` job —
+its first 1000 artifacts. The previous layout produced ~1350 jobs, and the last layers' digests
+were silently invisible to their merge jobs (2026-10-07). When adding a new layered image,
+add it to `docker-bake.hcl` and the variants script and give it a matching `merge` leg —
 they go together.
 
 There is also an optional `mirror-base-images.yml` workflow that mirrors the upstream
@@ -165,7 +192,7 @@ intact when editing the entrypoint.
 - Image tags are the upstream version string (`redis:7.2`, `php-fpm-magento2:8.3`),
   driven by each workflow's `matrix.version`. Every service now derives its matrix
   from a `discover` job (floor/pin/deny policy); php-fpm additionally runs the
-  `php-matrix` generators. No service hard-codes its full version list anymore
+  `bake-generator.php`. No service hard-codes its full version list anymore
   (legacy fixed jobs like `mysql-legacy` / `varnish-lts` are the exception).
 - Registry owner comes from `github.repository_owner` (so forks publish under their
   own namespace) — env blocks that say `ghcr.io/epartment/...` are the canonical
