@@ -163,7 +163,7 @@ jobs:
       registry: ${{ steps.plan.outputs.registry }}
       php_source_image: ${{ steps.plan.outputs.php_source_image }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: 8.4
@@ -242,7 +242,7 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.plan.outputs.base) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - name: Login to GHCR
         if: ${{ !env.ACT }}
@@ -294,7 +294,7 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.plan.outputs.chunks) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - name: Login to GHCR
         if: ${{ !env.ACT }}
@@ -339,7 +339,7 @@ jobs:
       matrix:
         image: ${{ fromJson(needs.plan.outputs.images) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - name: Login to GHCR
         if: ${{ !env.ACT }}
